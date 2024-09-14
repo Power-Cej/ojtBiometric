@@ -1,117 +1,193 @@
-const queryToJson = require('./queryToJson');
-const PromiseRouter = require('./PromiseRouter');
-const parsePayload = require('./parsePayload');
+const queryToJson = require("./queryToJson");
+const PromiseRouter = require("./PromiseRouter");
+const parsePayload = require("./parsePayload");
 // UseCases
-const HandShakeUseCase = require('./HandShakeUseCase');
-const AttendanceUseCase = require('./AttendanceUseCase');
-const RegisterEmployeeUseCase = require('./RegisterEmployeeUseCase');
-let upload = true;
+const HandShakeUseCase = require("./HandShakeUseCase");
+const AttendanceUseCase = require("./AttendanceUseCase");
+const RegisterEmployeeUseCase = require("./RegisterEmployeeUseCase");
+const FindObjectUseCase = require("./FindObejctUseCase");
+const UpsertUseCase = require("./UpsertUseCase");
+const config = require("./config");
+
+const findObject = new FindObjectUseCase();
+const upsertObject = new UpsertUseCase();
 
 class FunctionsRouter extends PromiseRouter {
-    constructor() {
-        super();
-        this.route('GET', '/iclock/cdata', this.handleHandshake.bind(this));
-        this.route('POST', '/iclock/cdata', this.handleUpload.bind(this));
-        this.route('GET', '/iclock/getrequest', this.handleRequest.bind(this));
-    }
+  constructor() {
+    super();
+    this.route("GET", "/iclock/cdata", this.handleHandshake.bind(this));
+    this.route("POST", "/iclock/cdata", this.handleUpload.bind(this));
+    this.route("GET", "/iclock/getrequest", this.handleRequest.bind(this));
+  }
 
-    handleHandshake(req) {
-        const query = queryToJson(req.query);
-        const handshake = new HandShakeUseCase();
-        return handshake.execute(query);
-    }
+  async handleHandshake(req) {
+    const query = queryToJson(req.query);
+    const handshake = new HandShakeUseCase();
 
-    handleUpload(req) {
-        const query = queryToJson(req.query);
-        const lines = req.body.split(/\r?\n/)// Split the data by new lines
-            .reduce((acc, cur) => {
-                if (cur.trim() !== '') {
-                    acc.push(cur.split('\t'));
-                }
-                return acc;
-            }, []);
+    return handshake.execute(query);
+  }
 
-        const attendance = new AttendanceUseCase();
-        console.log('received device upload');
-        console.log('query', query);
-        console.log('body', req.body);
-        console.log('lines', lines);
-        switch (query.table) {
-            case 'ATTLOG':
-                return attendance.execute(query, lines);
-            case 'OPERLOG':
-                const payloads = parsePayload(lines);
-                console.log('Payloads:', payloads);
-                if (payloads.length === 0) {
-                    return this.handleOperationLog(lines);
-                } else {
-                    return this.handleOperationUpload(payloads);
-                }
-            default:
-                return Promise.resolve('OK');
-
+  handleUpload(req) {
+    const query = queryToJson(req.query);
+    const lines = req.body
+      .split(/\r?\n/) // Split the data by new lines
+      .reduce((acc, cur) => {
+        if (cur.trim() !== "") {
+          acc.push(cur.split("\t"));
         }
+        return acc;
+      }, []);
 
-    }
+    console.log("LOGSSSSS: ", lines);
 
-    handleOperationUpload(payloads) {
-        const register = new RegisterEmployeeUseCase();
-        return register.execute(payloads);
-    }
-
-    handleOperationLog(lines) {
-        lines.forEach(line => {
-            const [type] = line;
-            switch (type) {
-                case 'OPLOG 4':// Access Menu
-                case 'OPLOG 9':// Delete User
-                case 'OPLOG 30':// Initialize new user
-                default:
-            }
-        });
-        return Promise.resolve('OK');
-    }
-
-    handleRequest(req) {
-        const query = queryToJson(req.query);
-        const data =
-            {
-                'FP PIN': '3',
-                FID: '6',
-                Size: '1636',
-                Valid: '1',
-                TMP: 'SpFTUzIxAAAD0tIECAUHCc7QAADr0nEBAAAAg38dQNIzAPkPigD8AIvdmQBFAAwPfwBE0owPPQBcALEPsdJ5AIwPpQBIABHdeACdAH4P2gDH0ucPRgDSAKUPHdLVAFUPYQAeAFzdeADiAF4PBADl0qEPmgD0AE0PVtL+AEUPegDOATDdIAAUAUoPWQAd068PNgAhAfsP1tIkAUoPtQD9AWHdVABDASoPBQBE02EPZwBJAeMOe9JMARMPWQCYASjcOgBjASoO7gBm0zQOzoePc1bvFq8G/X+TEYW/gaBQd4E7AYMFF3/8PS77TX6/AWaCRljilDuH92yWI+wl3JCqiquL6AOh3LN+7XAq9q4PLtCwA3IerQL/2mH8VxoXWzv3Sy5hhO/qCupKFl4I2SBjhjauTQ7uBvQl901qfpIrHPYgKmYUoumO7nqeRtfDtQoZZQVUA2HLyAH6Gse2oBTqL7T++eza6T/pMtQQA84A0fSXADHQSAxHDDMOuM992SE6AQJUHQcEA1kAAzAKAG3NBsIt/kBTDQBOy/3/v0b+wMDCBMXBFt4rAwBDGXAGCgOUL+39/UHCgxAD+zDtwML8KID//S16BQBHNf0EMgnSlUOJcHhbwgCfmxFKOAQAvo8T/C0HACBT+lY6CwO+SwP//ljA+gQD61h9nQ8AQZn0LCxFOMH//gTFOWOjaw0AsHSQr4SGog8ArnqJ/7HCwbB1BAC2ehaPBwN7igwzPQ4AZIyPE3B1/4PBBsWoksE8/xMACJ0iRD0tNFvA/TsIxXSeUoHBexQAIwHpwuFV/v7/QUGJFQPQxNf+//84hTY7LMFLAwAbx6XCFdIGzd5H//46ODHq/kDACwBKCus2/P87HAAi0SLAPxI6/zX+/sA6/sMswf///sD9OgkDkNBpklvCBMUa1o5+BgBF1mAEiwXSIdhXwcBpyABmCvH+/f4o/Tr9/i0GAF3aacNGwg7SXt9gw2yDBW0K0nTjZMPDxKvCE9Kb8JrDycMBko0WxcXDGQCWMI/FGsXCwsLDxA3EwRbDw8LCwsIBw8ARwgoAnfgpOP3+Kfn5/P8FEJQBTxCXAxCIASI4BhOFA0BswQMQQgM0EQUQHRZPiM0QIMVHZ8HD/gnVnxllwsTMzMKq3hDW8sHBwsF6iAeGb77D/3DBBRD2JUASlAYQOSU6osILwtAoTMD//+IHEwUpQ/8x/gbVtj+I/h0FEFRG8sV62xG+S1wu/D4pB8JnTTDDwiXVeFLyxcTFwojBBMPCEJKCwsLBwVbCwhPAZ8JvUkLFC0DTAQALRVIA'
-            }
-
-
-        console.log('Received request from device:', query);
-
-        const cmdId = 123;  // Incremental command ID for tracking
-        const userId = 2;  // User PIN for which the fingerprint needs to be enrolled
-        const fingerId = 6;  // Fingerprint ID (e.g., thumb, index finger, etc.)
-        const retry = 3;  // Number of retry attempts
-        const overwrite = 1;  // Whether to overwrite an existing fingerprint
-        const tmpData = data.TMP;  // Your fingerprint template data in base64 format
-
-        // const command = `C:${cmdId}:ENROLL_FP PIN=${userId}\tFID=${fingerId}\tRETRY=${retry}\tOVERWRITE=${overwrite}\tTMP=${tmpData}`;
-
-        const tab = '\t';
-        // const command = `C:1:DATA USER PIN=2`;
-        // const command = `C:1:DATA UPDATE USERINFO PIN=2${tab}Name=John Doe${tab}Passwd=1234${tab}TMP=${tmpData}`;
-        // const command = `C:2:ENROLL_FP PIN=2${tab}FID=6${tab}RETRY=3${tab}OVERWRITE=1${tab}TMP=${tmpData}`;
-        const commandF = `C:2:DATA UPDATE FINGERTMP PIN=2${tab}FID=6${tab}Size=1288${tab}Valid=1${tab}TMP=${tmpData}`;
-        const command = `C:1:DATA USER PIN=2${tab}Name=John Doe${tab}\n`+commandF;
-        // const command = `C:123:DATA UPDATE SMS MSG=Hello World!${tab}TAG=254${tab}UID=001${tab}MIN=5${tab}StartTime=2024-08-31 13:16:00`;
-
-        if (upload) {
-            upload = false;
-            console.log(`Sending fingerprint enroll command to device:`);
-            // return Promise.resolve(enrollCommand);
-            return Promise.resolve(command);
+    const attendance = new AttendanceUseCase();
+    switch (query.table) {
+      case "ATTLOG":
+        return attendance.execute(query, lines);
+      case "OPERLOG":
+        const payloads = parsePayload(lines);
+        if (payloads.length === 0) {
+          return this.handleOperationLog(query, lines, payloads);
+        } else {
+          return this.handleOperationUpload(query, payloads);
         }
-        return Promise.resolve('OK');
-
+      default:
+        return Promise.resolve("OK");
     }
+  }
+
+  async handleOperationUpload(query, payloads) {
+    const data = {
+      device: query.SN,
+      logMessage: `Successfully biometric registered user ${payloads[0]["FP PIN"]}`,
+      result: "User biometric registered",
+    };
+    await upsertObject.execute("biometric_logs", data);
+    const register = new RegisterEmployeeUseCase();
+    return register.execute(payloads);
+  }
+
+  handleOperationLog(query, lines) {
+    // input all field on creating new user it log 7, 30, and 6
+    lines.forEach(async (line) => {
+      const [type] = line;
+      console.log("PPPPP: ", type, " ", lines);
+      const data = {
+        device: query.SN,
+        logMessage: `Successfully deleted user ${line[3]}`,
+        result: "User Deleted",
+      };
+      switch (type) {
+        case "OPLOG 4": // Access Menu
+          break;
+        case "OPLOG 9": // Delete User
+          await upsertObject.execute("biometric_logs", data);
+          break;
+        case "OPLOG 10": // delete fingerPrintOnly
+          break;
+        case "OPLOG 11": // delete passwordOnly
+          break;
+        case "OPLOG 30": // Initialize new user
+          data.logMessage = `Successfully registered user ${line[3]}`;
+          data.result = "User Created";
+          await upsertObject.execute("biometric_logs", data);
+          break;
+        case "OPLOG 36": // edit user
+          break;
+        case "OPLOG 71": // changing User Role
+          break;
+        default:
+          break;
+      }
+    });
+    return Promise.resolve("OK");
+  }
+
+  async handleRequest(req) {
+    const query = queryToJson(req.query);
+    console.log("QUERY: ", query);
+    const users = await findObject.find("users", { sync: "false" });
+
+    // biometric user
+    if (users.length > 0) {
+      for (const user of users) {
+        // Prepare the data for each device
+        const bioData = {
+          pin: user.employee.agency,
+          name: user.username,
+          pass: user.employee.agency,
+          // privilege: "0" // nomarl User "0" or super Admin "1"
+        };
+
+        const tab = "\t";
+        const command = `C:1:DATA USER PIN=${bioData.pin}${tab}Name=${bioData.name}${tab}Passwd=${bioData.pass}\n`;
+
+        // Return the command immediately
+        const returnCommand = Promise.resolve(command);
+
+        // Wait for 30 sec to sync user for all connected Device
+        (async () => {
+          await new Promise((resolve) => setTimeout(resolve, 30000));
+          user.sync = "true";
+          await upsertObject.execute("users", user);
+        })();
+
+        console.log(
+          "Data sent to all devices successfully.",
+          command,
+          " ",
+          query
+        );
+
+        return returnCommand;
+      }
+    }
+
+    // biometric devices
+    if (query.SN || query.INFO) {
+      const devices = await findObject.find("devices", {
+        serialNum: query.SN,
+      });
+      const deviceInfo = query?.INFO?.split(",") || "";
+
+      if (devices.length > 0) {
+        devices[0].ipAddress = deviceInfo[4];
+        devices[0].update = new Date();
+        devices[0].stats = "online";
+        devices[0].port = config.server.port;
+        await upsertObject.execute("devices", devices[0]);
+      } else {
+        // If no devices found, create a new device and set status to online
+        const device = {
+          serialNum: query.SN,
+          ipAddress: deviceInfo[4],
+          update: new Date(),
+          stats: "online",
+          port: config.server.port,
+        };
+        await upsertObject.execute("devices", device);
+        console.log(`New device created: Online ${query.SN}`);
+      }
+    }
+
+    // device status offline
+    const devices = await findObject.find("devices", {});
+    const dateNow = new Date();
+    if (devices.length > 0) {
+      devices.map(async (device) => {
+        const updateAt = new Date(device.update);
+        const timeDiffInSeconds = (dateNow - updateAt) / 1000;
+        // Device is within 50 seconds, mark as offline
+        if (device.serialNum !== query.SN && timeDiffInSeconds > 50) {
+          // console.log("Offline");
+          device.stats = "offline";
+        }
+        await upsertObject.execute("devices", device);
+      });
+    }
+
+    return Promise.resolve("OK");
+  }
 }
 
 module.exports = FunctionsRouter;
