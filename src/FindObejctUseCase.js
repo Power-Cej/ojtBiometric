@@ -3,7 +3,7 @@ const request = require("./request"); // Import your custom request function
 const config = require("./config"); // Import your configuration (applicationId, endpoint)
 
 class FindObjectUseCase {
-  async find(collection, where) {
+  async execute(collection, where) {
     const options = {
       method: "GET",
       headers: {
