@@ -1,24 +1,57 @@
 const config = require("./config");
+const FindObjectUseCase = require("./FindObejctUseCase");
 const request = require("./request");
 const UpsertUseCase = require("./UpsertUseCase");
 
+const selectedDay = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+const findObject = new FindObjectUseCase();
+const upsertObject = new UpsertUseCase();
+const now = new Date();
+
+function convertTo24HourTime(time) {
+  const [timePart, modifier] = time.split(" ");
+  let [hours, minutes] = timePart.split(":").map(Number);
+
+  if (modifier === "PM" && hours !== 12) {
+    hours += 12;
+  } else if (modifier === "AM" && hours === 12) {
+    hours = 0;
+  }
+  return { hours, minutes };
+}
+
 class AttendanceUseCase {
-  // send(data) {
-  //   const options = {
-  //     method: "POST",
-  //     headers: {
-  //       "Content-Type": "application/json",
-  //       "X-Application-Id": config.applicationId,
-  //     },
-  //     body: JSON.stringify(data),
-  //   };
-  //   const url = `${config.endpoint}/collections/daily_time_record`;
-  //   return request(url, options);
-  // }
+  getCurrentDate() {
+    const options = {
+      weekday: "long",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    };
+    return new Date().toLocaleDateString("en-US", options);
+  }
+
+  getCurrentTime() {
+    const options = {
+      hour12: true,
+      hour: "numeric",
+      minute: "numeric",
+      second: "numeric",
+    };
+    return new Date().toLocaleTimeString("en-US", options);
+  }
 
   async execute(query, lines) {
     let total = 0;
-    const upsertObject = new UpsertUseCase();
     for (let line of lines) {
       const [
         userID,
@@ -30,33 +63,188 @@ class AttendanceUseCase {
         status5,
       ] = line;
 
-      console.log("ATTTLOG: ", line);
-      const status = timeInOutStats === "0" ? "Time IN" : "Time OUT";
-      const dateToday = new Date();
-      const utcTime = dateToday.toUTCString(); // Get UTC date and time
+      const [employee, dailyTimeRec, listofHolidays] = await Promise.all([
+        findObject.execute("employees", {
+          agency: Number(userID),
+        }),
+        findObject.execute("daily_time_record", {
+          date: this.getCurrentDate(),
+          employee: { agency: Number(userID) },
+        }),
+        findObject.execute("holidays", { date: this.getCurrentDate() }),
+      ]);
 
-      // Extract the local time in HH:MM format
-      const localTime = dateToday.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
+      const listofLeaves = await findObject.execute("leave_request", {
+        employee: { id: employee[0].id },
+        stats: "Approved",
+        startdate: { $lte: this.getCurrentDate() },
+        enddate: { $gte: this.getCurrentDate() },
       });
 
-      const attendance = {
-        userId: parseInt(userID),
-        date: utcTime,
-        time: localTime,
-        stats: status,
-      };
-      console.log("UTC: ", utcTime);
+      const currentYear = now.getFullYear().toString();
+      const currentMonth = now.getMonth().toString();
+      let timeRecStats = [];
+
+      let attendance = this.createAttendanceRecord(
+        dailyTimeRec,
+        employee,
+        currentYear,
+        currentMonth,
+        timeRecStats
+      );
+
+      if (listofHolidays.length > 0) {
+        this.handleHolidays(listofHolidays, dailyTimeRec, timeRecStats);
+      }
+      if (listofLeaves.length > 0) {
+        this.handleLeaves(listofLeaves, dailyTimeRec, timeRecStats);
+      }
+
+      if (this.shouldCheckSchedule(employee, listofHolidays, listofLeaves)) {
+        this.checkSchedule(
+          employee,
+          dailyTimeRec,
+          timeRecStats,
+          attendance,
+          query
+        );
+      }
+
       try {
-        await upsertObject.execute("attendance_rec", attendance);
-        total++;
+        // console.log("employee: ", employee);
+        const dayToDay = selectedDay[now.getDay()];
+        const schedule = employee[0].schedule.find(
+          (sched) => sched.day === dayToDay
+        );
+        if (Array.isArray(employee[0].schedule) && schedule) {
+          console.log("Attendance: ", attendance);
+          await upsertObject.execute("daily_time_record", attendance);
+          timeRecStats = []; // Reset timeRecStats after processing
+          total++;
+        } else {
+          console.log("Assign Schedule First");
+        }
       } catch (error) {
-        console.error("error send", error.text);
+        console.error("Error saving attendance record: ", error);
       }
     }
     return `OK: ${total}`;
+  }
+
+  createAttendanceRecord(
+    dailyTimeRec,
+    employee,
+    currentYear,
+    currentMonth,
+    timeRecStats
+  ) {
+    if (dailyTimeRec.length === 0) {
+      return {
+        date: this.getCurrentDate(),
+        timeRecStats,
+        timeIn: this.getCurrentTime(),
+        timeOut: "--:--",
+        employee: employee[0],
+        year: currentYear,
+        month: currentMonth,
+      };
+    } else {
+      return {
+        ...dailyTimeRec[0],
+        timeRecStats,
+        timeOut: this.getCurrentTime(),
+        employee: employee[0],
+        year: currentYear,
+        month: currentMonth,
+      };
+    }
+  }
+
+  handleHolidays(listofHolidays, dailyTimeRec, timeRecStats) {
+    listofHolidays.forEach((holiday) => {
+      if (holiday.type) {
+        timeRecStats.push(holiday.type);
+      }
+    });
+  }
+
+  handleLeaves(listofLeaves, dailyTimeRec, timeRecStats) {
+    listofLeaves.forEach((leave) => {
+      if (leave.selectedType) {
+        timeRecStats.push(leave.selectedType);
+      }
+    });
+  }
+
+  shouldCheckSchedule(employee, listofHolidays, listofLeaves) {
+    return (
+      Array.isArray(employee[0].schedule) &&
+      employee[0].schedule.length > 0 &&
+      listofHolidays.length === 0 &&
+      listofLeaves.length === 0
+    );
+  }
+
+  async checkSchedule(employee, dailyTimeRec, timeRecStats, attendance, query) {
+    const dayToDay = selectedDay[now.getDay()];
+    const schedule = employee[0].schedule.find(
+      (sched) => sched.day === dayToDay
+    );
+
+    if (schedule) {
+      const newTimeNow = convertTo24HourTime(this.getCurrentTime());
+      const newSchedTimeIN = convertTo24HourTime(schedule.timein);
+      const newSchedTimeOUT = convertTo24HourTime(schedule.timeout);
+
+      const empName = `${attendance.employee.Firstname} ${attendance.employee.Middlename} ${attendance.employee.surname}`;
+      const data = {
+        device: query.SN,
+        logMessage: `Successfully Time In ${empName}`,
+        result: "Time In",
+      };
+
+      if (dailyTimeRec.length === 0) {
+        if (
+          newTimeNow.hours > newSchedTimeIN.hours ||
+          (newTimeNow.hours === newSchedTimeIN.hours &&
+            newTimeNow.minutes > newSchedTimeIN.minutes + 15)
+        ) {
+          timeRecStats.push("LATE");
+
+          try {
+            await upsertObject.execute("biometric_logs", data);
+          } catch (e) {
+            console.error(e);
+          }
+          // log time in
+        }
+      } else if (dailyTimeRec.length > 0) {
+        const timeIn = convertTo24HourTime(dailyTimeRec[0].timeIn);
+        if (
+          timeIn.hours > newSchedTimeIN.hours ||
+          (timeIn.hours === newSchedTimeIN.hours &&
+            timeIn.minutes > newSchedTimeIN.minutes + 15)
+        ) {
+          timeRecStats.push("LATE");
+        }
+
+        if (
+          newTimeNow.hours < newSchedTimeOUT.hours ||
+          (newTimeNow.hours === newSchedTimeOUT.hours &&
+            newTimeNow.minutes < newSchedTimeOUT.minutes)
+        ) {
+          timeRecStats.push("UNDERTIME");
+        }
+        try {
+          (data.logMessage = `Successfully Time Out ${empName}`),
+            (data.result = "Time Out"),
+            upsertObject.execute("biometric_logs", data);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+    return "OK";
   }
 }
 

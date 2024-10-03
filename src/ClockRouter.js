@@ -6,13 +6,14 @@ const HandShakeUseCase = require("./HandShakeUseCase");
 const AttendanceUseCase = require("./AttendanceUseCase");
 const RegisterEmployeeUseCase = require("./RegisterEmployeeUseCase");
 const FindObjectUseCase = require("./FindObejctUseCase");
-const HrisUseCase = require("./HrisUseCase");
 const UpsertUseCase = require("./UpsertUseCase");
 const DeviceUseCase = require("./DeviceUseCase");
 const config = require("./config");
+const DeviceInsertionUseCase = require("./DeviceInsertionUseCase");
+const userToCommand = require("./userToCommand");
 
 const findObject = new FindObjectUseCase();
-const hrisObject = new HrisUseCase();
+const deviceInsertionObject = new DeviceInsertionUseCase();
 const deviceOjbect = new DeviceUseCase();
 const upsertObject = new UpsertUseCase();
 
@@ -42,7 +43,7 @@ class FunctionsRouter extends PromiseRouter {
         return acc;
       }, []);
 
-    console.log("LOGSSSSS: ", lines);
+    // console.log("LOGSSSSS: ", lines);
 
     const attendance = new AttendanceUseCase();
     switch (query.table) {
@@ -61,24 +62,24 @@ class FunctionsRouter extends PromiseRouter {
   }
 
   async handleOperationUpload(query, payloads) {
-    const data = {
-      device: query.SN,
-      logMessage: `Successfully biometric registered user ${payloads[0]["FP PIN"]}`,
-      result: "User biometric registered",
-    };
-    await upsertObject.execute("biometric_logs", data);
     const register = new RegisterEmployeeUseCase();
-    return register.execute(payloads);
+    return register.execute(query, payloads);
   }
 
-  handleOperationLog(query, lines) {
-    // input all field on creating new user it log 7, 30, and 6
+  async handleOperationLog(query, lines) {
     lines.forEach(async (line) => {
       const [type] = line;
       console.log("PPPPP: ", type, " ", lines);
+      const employee = await findObject.execute("employees", {
+        agency: Number(line[3]),
+      });
+      const empName =
+        employee.length > 0
+          ? `${employee[0].Firstname} ${employee[0].Middlename} ${employee[0].surname}`
+          : line[3];
       const data = {
         device: query.SN,
-        logMessage: `Successfully deleted user ${line[3]}`,
+        logMessage: `Successfully deleted ${empName}`,
         result: "User Deleted",
       };
       switch (type) {
@@ -92,7 +93,7 @@ class FunctionsRouter extends PromiseRouter {
         case "OPLOG 11": // delete passwordOnly
           break;
         case "OPLOG 30": // Initialize new user
-          data.logMessage = `Successfully registered user ${line[3]}`;
+          data.logMessage = `Successfully registered ${empName}`;
           data.result = "User Created";
           await upsertObject.execute("biometric_logs", data);
           break;
@@ -112,48 +113,97 @@ class FunctionsRouter extends PromiseRouter {
     const devices = await findObject.execute("devices", {
       serialNum: query.SN,
     });
+    const deviceInfo = query?.INFO?.split(",") || "";
     console.log("QUERY: ", query);
-    // hris relation
-    // await hrisObject.execute(query, devices);
-    // devices relation
 
-    const users = await findObject.execute("employees", {
-      area: devices[0]?.area,
-    });
+    // Function to find the last non-empty field
+    const fields = [
+      "region",
+      "office",
+      "division",
+      "section",
+      "unit",
+      "cluster",
+    ];
+    const getLastNonEmptyField = (source) => {
+      let result = "";
+      let index = -1;
 
-    // biometric user
-    if (users.length > 0 && devices.length > 0) {
-      for (const user of users) {
-        // Prepare the data for each device
-        const bioData = {
-          pin: user.agency,
-          name: user.Firstname,
-          pass: user.agency,
-          // pri: "14", // nomarl User "0", Registar "2", Admin "6", user-defined "10", super Admin "14";
-        };
-
-        const tab = "\t";
-        const command = `C:1:DATA USER PIN=${bioData.pin}${tab}Name=${bioData.name}${tab}Passwd=${bioData.pass}${tab}\n`;
-
-        const updateAt = new Date(user.lastSync);
-        const lastSync = new Date(devices[0].lastSync);
-
-        const isLastSync = updateAt > lastSync;
-        // update the device
-        await deviceOjbect.execute(query, devices, isLastSync);
-        if (isLastSync) {
-          console.log(
-            "Data sent to all devices successfully.",
-            command,
-            " ",
-            query
-          );
-
-          return Promise.resolve(command);
+      fields.forEach((field, i) => {
+        if (source[field] && source[field] !== "") {
+          result = source[field];
+          index = i;
         }
+      });
+
+      return { result, index };
+    };
+
+    // insert device if there's no device and status
+    await deviceInsertionObject.execute(query, devices, deviceInfo);
+
+    // check if devices contain required field
+    if (
+      devices.length > 0 &&
+      fields.some(
+        (field) => devices[0].hasOwnProperty(field) && devices[0][field]
+      )
+    ) {
+      const usersQuery = getLastNonEmptyField(devices[0]);
+      const field = `${fields[usersQuery.index]}`;
+
+      // const users = await findObject.execute("users", {
+      //   employee: { [field]: usersQuery.result },
+      //   updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
+      // });
+
+      // const userQuery = {
+      //   $or: [
+      //     {
+      //       employee: { [field]: usersQuery.result },
+      //     },
+      //     {
+      //       serialNum: query.SN,
+      //     },
+      //   ],
+      //   updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
+      // };
+      // const users = await findObject.execute("users", userQuery);
+
+      const users = await findObject.execute("users", {
+        // employee: { [field]: usersQuery.result },
+        updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
+      });
+
+      if (devices.length > 0) {
+        const findEmployee = users.find(
+          (item) =>
+            item.employee[field] === usersQuery.result ||
+            item.serialNum === query.SN
+        );
+        if (
+          users.length > 0 &&
+          findEmployee &&
+          Object.keys(findEmployee).length > 0
+        ) {
+          // update the device
+          await deviceOjbect.execute(query, devices, deviceInfo);
+          // insert Data to the device
+          return userToCommand(users);
+        } else {
+          // update the device
+          await deviceOjbect.execute(query, devices, deviceInfo);
+          return Promise.resolve("OK");
+        }
+      } else {
+        console.log(
+          "there's no available employee, to the device current location!"
+        );
+        return Promise.resolve("OK");
       }
     }
 
+    console.log("Please Insert Device Location!");
     return Promise.resolve("OK");
   }
 }
