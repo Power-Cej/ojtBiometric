@@ -152,24 +152,6 @@ class FunctionsRouter extends PromiseRouter {
       const usersQuery = getLastNonEmptyField(devices[0]);
       const field = `${fields[usersQuery.index]}`;
 
-      // const users = await findObject.execute("users", {
-      //   employee: { [field]: usersQuery.result },
-      //   updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
-      // });
-
-      // const userQuery = {
-      //   $or: [
-      //     {
-      //       employee: { [field]: usersQuery.result },
-      //     },
-      //     {
-      //       serialNum: query.SN,
-      //     },
-      //   ],
-      //   updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
-      // };
-      // const users = await findObject.execute("users", userQuery);
-
       const users = await findObject.execute("users", {
         // employee: { [field]: usersQuery.result },
         updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
@@ -178,9 +160,10 @@ class FunctionsRouter extends PromiseRouter {
       if (devices.length > 0) {
         const findEmployee = users.find(
           (item) =>
-            item.employee[field] === usersQuery.result ||
+            item.employee[field] === usersQuery?.result ||
             item.serialNum === query.SN
         );
+
         if (
           users.length > 0 &&
           findEmployee &&

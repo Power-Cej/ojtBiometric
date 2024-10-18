@@ -36,8 +36,9 @@ class UpsertUseCase {
         throw new Error(`Request failed with status: ${response.status}`);
       }
     } catch (error) {
-      console.error("Error in upsert method:", error);
-      throw error;
+      console.log("Error in upsert method:", error);
+      return Promise.all("Error");
+      // throw error;
     }
   }
 }

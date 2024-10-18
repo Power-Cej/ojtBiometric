@@ -40,6 +40,15 @@ class AttendanceUseCase {
     return new Date().toLocaleDateString("en-US", options);
   }
 
+  suspensionFormat() {
+    const options = {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    };
+    return new Date().toLocaleDateString("en-US", options);
+  }
+
   getCurrentTime() {
     const options = {
       hour12: true,
@@ -63,72 +72,88 @@ class AttendanceUseCase {
         status5,
       ] = line;
 
-      const [employee, dailyTimeRec, listofHolidays] = await Promise.all([
-        findObject.execute("employees", {
-          agency: Number(userID),
-        }),
-        findObject.execute("daily_time_record", {
-          date: this.getCurrentDate(),
-          employee: { agency: Number(userID) },
-        }),
-        findObject.execute("holidays", { date: this.getCurrentDate() }),
-      ]);
+      if (userID === "undefined") {
+        return Promise.resolve("OK");
+      } else {
+        console.log("USERIDD: ", userID);
+        const [employee, dailyTimeRec, listofHolidays, listofSuspension] =
+          await Promise.all([
+            findObject.execute("employees", {
+              agency: Number(userID),
+            }),
+            findObject.execute("daily_time_record", {
+              date: this.getCurrentDate(),
+              employee: { agency: Number(userID) },
+            }),
+            findObject.execute("holidays", { date: this.getCurrentDate() }),
+            findObject.execute("suspension", {
+              status: "active",
+              dateFrom: {
+                $lte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
+              },
+              dateTo: {
+                $gte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
+              },
+            }),
+          ]);
 
-      const listofLeaves = await findObject.execute("leave_request", {
-        employee: { id: employee[0].id },
-        stats: "Approved",
-        startdate: { $lte: this.getCurrentDate() },
-        enddate: { $gte: this.getCurrentDate() },
-      });
+        const listofLeaves = await findObject.execute("leave_request", {
+          employee: { id: employee[0].id },
+          stats: "Approved",
+          startdate: { $lte: this.getCurrentDate() },
+          enddate: { $gte: this.getCurrentDate() },
+        });
 
-      const currentYear = now.getFullYear().toString();
-      const currentMonth = now.getMonth().toString();
-      let timeRecStats = [];
+        const currentYear = now.getFullYear().toString();
+        const currentMonth = now.getMonth().toString();
+        let timeRecStats = [];
 
-      let attendance = this.createAttendanceRecord(
-        dailyTimeRec,
-        employee,
-        currentYear,
-        currentMonth,
-        timeRecStats
-      );
-
-      if (listofHolidays.length > 0) {
-        this.handleHolidays(listofHolidays, dailyTimeRec, timeRecStats);
-      }
-      if (listofLeaves.length > 0) {
-        this.handleLeaves(listofLeaves, dailyTimeRec, timeRecStats);
-      }
-
-      if (this.shouldCheckSchedule(employee, listofHolidays, listofLeaves)) {
-        this.checkSchedule(
-          employee,
+        let attendance = this.createAttendanceRecord(
           dailyTimeRec,
-          timeRecStats,
-          attendance,
-          query
+          employee,
+          currentYear,
+          currentMonth,
+          timeRecStats
         );
-      }
 
-      try {
-        // console.log("employee: ", employee);
-        const dayToDay = selectedDay[now.getDay()];
-        const schedule = employee[0].schedule.find(
-          (sched) => sched.day === dayToDay
-        );
-        if (Array.isArray(employee[0].schedule) && schedule) {
-          console.log("Attendance: ", attendance);
-          await upsertObject.execute("daily_time_record", attendance);
-          timeRecStats = []; // Reset timeRecStats after processing
-          total++;
-        } else {
-          console.log("Assign Schedule First");
+        if (listofHolidays.length > 0) {
+          this.handleHolidays(listofHolidays, dailyTimeRec, timeRecStats);
         }
-      } catch (error) {
-        console.error("Error saving attendance record: ", error);
+        if (listofLeaves.length > 0) {
+          this.handleLeaves(listofLeaves, dailyTimeRec, timeRecStats);
+        }
+
+        if (this.shouldCheckSchedule(employee, listofHolidays, listofLeaves)) {
+          this.checkSchedule(
+            employee,
+            dailyTimeRec,
+            timeRecStats,
+            attendance,
+            query,
+            listofSuspension
+          );
+        }
+
+        try {
+          // console.log("employee: ", employee);
+          const dayToDay = selectedDay[now.getDay()];
+          const schedule = employee[0].schedule.find(
+            (sched) => sched.day === dayToDay
+          );
+          if (Array.isArray(employee[0].schedule) && schedule) {
+            console.log("Attendance: ", attendance);
+            await upsertObject.execute("daily_time_record", attendance);
+            timeRecStats = []; // Reset timeRecStats after processing
+            total++;
+          } else {
+            console.log("Assign Schedule First");
+          }
+        } catch (error) {
+          console.error("Error saving attendance record: ", error);
+        }
       }
+      return `OK: ${total}`;
     }
-    return `OK: ${total}`;
   }
 
   createAttendanceRecord(
@@ -185,7 +210,14 @@ class AttendanceUseCase {
     );
   }
 
-  async checkSchedule(employee, dailyTimeRec, timeRecStats, attendance, query) {
+  async checkSchedule(
+    employee,
+    dailyTimeRec,
+    timeRecStats,
+    attendance,
+    query,
+    listofSuspension
+  ) {
     const dayToDay = selectedDay[now.getDay()];
     const schedule = employee[0].schedule.find(
       (sched) => sched.day === dayToDay
@@ -220,6 +252,9 @@ class AttendanceUseCase {
         }
       } else if (dailyTimeRec.length > 0) {
         const timeIn = convertTo24HourTime(dailyTimeRec[0].timeIn);
+        if (listofSuspension.length > 0) {
+          timeRecStats.push("SUSPENDED");
+        }
         if (
           timeIn.hours > newSchedTimeIN.hours ||
           (timeIn.hours === newSchedTimeIN.hours &&
@@ -227,7 +262,6 @@ class AttendanceUseCase {
         ) {
           timeRecStats.push("LATE");
         }
-
         if (
           newTimeNow.hours < newSchedTimeOUT.hours ||
           (newTimeNow.hours === newSchedTimeOUT.hours &&
@@ -235,6 +269,7 @@ class AttendanceUseCase {
         ) {
           timeRecStats.push("UNDERTIME");
         }
+
         try {
           (data.logMessage = `Successfully Time Out ${empName}`),
             (data.result = "Time Out"),

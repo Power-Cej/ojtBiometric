@@ -29,7 +29,8 @@ class FindObjectUseCase {
       }
     } catch (error) {
       console.error("Error in find method:", error);
-      throw error; // Rethrow or handle the error as needed
+      return Promise.all("Error");
+      // throw error; // Rethrow or handle the error as needed
     }
   }
 }
