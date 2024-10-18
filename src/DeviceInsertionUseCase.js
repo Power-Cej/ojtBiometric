@@ -16,6 +16,8 @@ class DeviceInsertionUseCase {
         stats: "online",
         port: config.server.port,
         lastSync,
+        isReboot: false,
+        isClearLog: false,
       };
       await upsertObject.execute("devices", device);
       console.log(`New device created: Online ${query.SN}`);

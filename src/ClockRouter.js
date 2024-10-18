@@ -10,8 +10,9 @@ const UpsertUseCase = require("./UpsertUseCase");
 const DeviceUseCase = require("./DeviceUseCase");
 const config = require("./config");
 const DeviceInsertionUseCase = require("./DeviceInsertionUseCase");
-const userToCommand = require("./userToCommand");
-const RebootUseCase = require("./request/RebootUseCase");
+const { RebootDeviceCommand } = require("./request/RebootDeviceCommand");
+const SendUserCommand = require("./request/SendUserCommand");
+const { ClearLogsDeviceCommand } = require("./request/RebootDeviceCommand");
 
 const findObject = new FindObjectUseCase();
 const deviceInsertionObject = new DeviceInsertionUseCase();
@@ -116,7 +117,7 @@ class FunctionsRouter extends PromiseRouter {
     });
     const deviceInfo = query?.INFO?.split(",") || "";
     console.log("QUERY: ", query);
-
+    // return `C:{{1}}:CLEAR\tLOG`;
     // Function to find the last non-empty field
     const fields = [
       "region",
@@ -173,13 +174,22 @@ class FunctionsRouter extends PromiseRouter {
           // update the device
           await deviceOjbect.execute(query, devices, deviceInfo);
           // insert Data to the device
-          return userToCommand(users);
+          return SendUserCommand(users);
         } else {
-          // update the device
-          const reboot = RebootUseCase(findObject, query.SN);
-          await deviceOjbect.execute(query, devices, deviceInfo);
-          return reboot;
           // reboot device
+          const reboot = RebootDeviceCommand(findObject, query.SN);
+          // Clear logs
+          const clearLogs = ClearLogsDeviceCommand(findObject, query.SN);
+
+          await deviceOjbect.execute(query, devices, deviceInfo);
+
+          if ((await reboot) !== "OK") {
+            return reboot;
+          }
+          if ((await clearLogs) !== "OK") {
+            return clearLogs;
+          }
+          return Promise.resolve("OK");
         }
       } else {
         console.log(

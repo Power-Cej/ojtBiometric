@@ -1,4 +1,4 @@
-function userToCommand(users) {
+function SendUserCommand(users) {
   return users
     .map((user, index) => {
       // Create the bioData for each user
@@ -70,4 +70,4 @@ function userToCommand(users) {
     .join("\n"); // Join all commands with new line
 }
 
-module.exports = userToCommand;
+module.exports = SendUserCommand;
