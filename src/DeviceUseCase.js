@@ -16,6 +16,7 @@ class DeviceUseCase {
         devices[0].stats = "online";
         devices[0].port = config.server.port;
         devices[0].lastSync = lastSync;
+        devices[0].isReboot = false;
         // lastSync Checking
         // if (isLastSync) {
         //   devices[0].lastSync = lastSync;

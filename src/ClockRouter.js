@@ -11,6 +11,7 @@ const DeviceUseCase = require("./DeviceUseCase");
 const config = require("./config");
 const DeviceInsertionUseCase = require("./DeviceInsertionUseCase");
 const userToCommand = require("./userToCommand");
+const RebootUseCase = require("./request/RebootUseCase");
 
 const findObject = new FindObjectUseCase();
 const deviceInsertionObject = new DeviceInsertionUseCase();
@@ -175,8 +176,10 @@ class FunctionsRouter extends PromiseRouter {
           return userToCommand(users);
         } else {
           // update the device
+          const reboot = RebootUseCase(findObject, query.SN);
           await deviceOjbect.execute(query, devices, deviceInfo);
-          return Promise.resolve("OK");
+          return reboot;
+          // reboot device
         }
       } else {
         console.log(
