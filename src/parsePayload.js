@@ -1,4 +1,5 @@
 function parsePayload(lines) {
+  console.log("LINE: ", lines);
   return lines.reduce((acc, cur) => {
     const payload = {};
     cur.forEach((item) => {

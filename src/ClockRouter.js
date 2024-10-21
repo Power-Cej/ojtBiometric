@@ -13,6 +13,7 @@ const DeviceInsertionUseCase = require("./DeviceInsertionUseCase");
 const { RebootDeviceCommand } = require("./request/RebootDeviceCommand");
 const SendUserCommand = require("./request/SendUserCommand");
 const { ClearLogsDeviceCommand } = require("./request/RebootDeviceCommand");
+const RemoveUserCommand = require("./request/RemoveUserCommand");
 
 const findObject = new FindObjectUseCase();
 const deviceInsertionObject = new DeviceInsertionUseCase();
@@ -25,6 +26,7 @@ class FunctionsRouter extends PromiseRouter {
     this.route("GET", "/iclock/cdata", this.handleHandshake.bind(this));
     this.route("POST", "/iclock/cdata", this.handleUpload.bind(this));
     this.route("GET", "/iclock/getrequest", this.handleRequest.bind(this));
+    // this.route("POST", "/iclock/devicecmd", this.handleReturnResult.bind(this));
   }
 
   async handleHandshake(req) {
@@ -34,7 +36,15 @@ class FunctionsRouter extends PromiseRouter {
     return handshake.execute(query);
   }
 
+  // handleReturnResult(req) {
+  //   console.log("query: ", req);
+  //   const query = queryToJson(req.query);
+  //   console.log("line: ", query);
+  //   return Promise.resolve("OK");
+  // }
+
   handleUpload(req) {
+    console.log("Request to Biometric Device:", req);
     const query = queryToJson(req.query);
     const lines = req.body
       .split(/\r?\n/) // Split the data by new lines
@@ -45,9 +55,8 @@ class FunctionsRouter extends PromiseRouter {
         return acc;
       }, []);
 
-    // console.log("LOGSSSSS: ", lines);
-
     const attendance = new AttendanceUseCase();
+    console.log("QUERY TALE: ", query);
     switch (query.table) {
       case "ATTLOG":
         return attendance.execute(query, lines);
@@ -117,7 +126,6 @@ class FunctionsRouter extends PromiseRouter {
     });
     const deviceInfo = query?.INFO?.split(",") || "";
     console.log("QUERY: ", query);
-    // return `C:{{1}}:CLEAR\tLOG`;
     // Function to find the last non-empty field
     const fields = [
       "region",
@@ -154,16 +162,17 @@ class FunctionsRouter extends PromiseRouter {
       const usersQuery = getLastNonEmptyField(devices[0]);
       const field = `${fields[usersQuery.index]}`;
 
+      // Checks if updatedAt is greater than lastSync
       const users = await findObject.execute("users", {
-        // employee: { [field]: usersQuery.result },
-        updatedAt: { $gt: new Date(devices[0].lastSync) }, // Checks if updatedAt is greater than lastSync
+        updatedAt: { $gt: new Date(devices[0].lastSync) },
       });
 
       if (devices.length > 0) {
+        // Check if query.SN is inside the array
         const findEmployee = users.find(
           (item) =>
             item.employee[field] === usersQuery?.result ||
-            item.serialNum === query.SN
+            (Array.isArray(item.serialNum) && item.serialNum.includes(query.SN))
         );
 
         if (
@@ -173,8 +182,16 @@ class FunctionsRouter extends PromiseRouter {
         ) {
           // update the device
           await deviceOjbect.execute(query, devices, deviceInfo);
-          // insert Data to the device
-          return SendUserCommand(users);
+
+          // remove Data to the Device
+          if (findEmployee.isRemoved === true) {
+            const removed = RemoveUserCommand(users, upsertObject);
+            console.log("REMOVED: ", removed);
+            return removed;
+          } else {
+            // insert Data to the device
+            return SendUserCommand(users);
+          }
         } else {
           // reboot device
           const reboot = RebootDeviceCommand(findObject, query.SN);

@@ -72,6 +72,9 @@ class AttendanceUseCase {
         status5,
       ] = line;
 
+      console.log("TIMESTAMP: ", timestamp);
+      const deviceTime = timestamp.split(" ");
+
       if (userID === "undefined") {
         return Promise.resolve("OK");
       } else {
@@ -113,7 +116,8 @@ class AttendanceUseCase {
           employee,
           currentYear,
           currentMonth,
-          timeRecStats
+          timeRecStats,
+          deviceTime[1]
         );
 
         if (listofHolidays.length > 0) {
@@ -161,13 +165,14 @@ class AttendanceUseCase {
     employee,
     currentYear,
     currentMonth,
-    timeRecStats
+    timeRecStats,
+    deviceTime
   ) {
     if (dailyTimeRec.length === 0) {
       return {
         date: this.getCurrentDate(),
         timeRecStats,
-        timeIn: this.getCurrentTime(),
+        timeIn: deviceTime,
         timeOut: "--:--",
         employee: employee[0],
         year: currentYear,
@@ -177,7 +182,7 @@ class AttendanceUseCase {
       return {
         ...dailyTimeRec[0],
         timeRecStats,
-        timeOut: this.getCurrentTime(),
+        timeOut: deviceTime,
         employee: employee[0],
         year: currentYear,
         month: currentMonth,
