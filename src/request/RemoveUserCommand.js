@@ -10,7 +10,10 @@ function RemoveUserCommand(users, upsertObject) {
       const tab = "\t";
 
       const cValue = index + 1;
-      const deleteCommand = `C:${cValue}:DATA DELETE USERINFO PIN=${removeData.pin}`;
+      const deleteUserPhoto = `C:${cValue}}:DATA DELETE ATTPHOTO PIN=${removeData.pin}\n`;
+      const deleteCommand =
+        `C:${cValue}:DATA DELETE USERINFO PIN=${removeData.pin}\n` +
+        deleteUserPhoto;
       console.log("DELETE: ", deleteCommand);
       return deleteCommand;
     })
