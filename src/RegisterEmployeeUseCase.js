@@ -11,7 +11,7 @@ function formatTMPString(tmp) {
 
 class RegisterEmployeeUseCase {
   async execute(query, payloads) {
-    console.log("PAYLOAD: ", payloads);
+    // console.log("PAYLOAD: ", payloads);
     const employee = await findObject.execute("employees", {
       agency: Number(payloads[0]["FP PIN"]),
     });
@@ -51,11 +51,10 @@ class RegisterEmployeeUseCase {
 
       // Update the user object with the modified fingerprint and FID arrays
       await upsertObject.execute("users", user[0]);
-
-      return "Ok";
+      console.log("Finer Registered");
+      return Promise.resolve("OK");
     } else {
-      console.error("No Employee or User");
-      return "OK";
+      return Promise.reject("error biometric finger");
     }
   }
 }

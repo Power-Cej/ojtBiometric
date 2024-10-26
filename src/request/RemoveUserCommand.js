@@ -2,6 +2,7 @@ function RemoveUserCommand(users, upsertObject) {
   return users
     .map((user, index) => {
       user.isRemoved = false;
+      user.removedSN = 0;
       upsertObject.execute("users", user);
 
       const removeData = {

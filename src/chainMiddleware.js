@@ -4,11 +4,11 @@
  * This new function returns a promise that will be resolved by chaining.
  */
 function chainMiddleware(handlers) {
-    return function (req, res) {
-        return handlers.reduce((promise, handler) => {
-            return promise.then(() => handler(req, res));
-        }, Promise.resolve());
-    }
+  return function (req, res) {
+    return handlers.reduce((promise, handler) => {
+      return promise.then(() => handler(req, res));
+    }, Promise.resolve());
+  };
 }
 
 module.exports = chainMiddleware;

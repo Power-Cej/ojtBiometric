@@ -1,5 +1,6 @@
 const config = require("./config");
 const FindObjectUseCase = require("./FindObejctUseCase");
+const handleLeaveWithPay = require("./leavetype/handleLeaveWithPay");
 const request = require("./request");
 const UpsertUseCase = require("./UpsertUseCase");
 
@@ -59,6 +60,27 @@ class AttendanceUseCase {
     return new Date().toLocaleTimeString("en-US", options);
   }
 
+  computeCreditDeduction(undertimeMinutes) {
+    let conversionValue = 0.0;
+
+    for (let i = 1; i <= undertimeMinutes; i++) {
+      // Add 0.003 at 7th, 19th, 31st, 43rd, 55th minute of every hour
+      if (
+        i % 60 === 7 ||
+        i % 60 === 19 ||
+        i % 60 === 31 ||
+        i % 60 === 43 ||
+        i % 60 === 55
+      ) {
+        conversionValue += 0.003;
+      } else {
+        conversionValue += 0.002;
+      }
+    }
+
+    return conversionValue.toFixed(3).toString();
+  }
+
   async execute(query, lines) {
     let total = 0;
     for (let line of lines) {
@@ -78,7 +100,6 @@ class AttendanceUseCase {
       if (userID === "undefined") {
         return Promise.resolve("OK");
       } else {
-        console.log("USERIDD: ", userID);
         const [employee, dailyTimeRec, listofHolidays, listofSuspension] =
           await Promise.all([
             findObject.execute("employees", {
@@ -99,7 +120,6 @@ class AttendanceUseCase {
               },
             }),
           ]);
-
         const listofLeaves = await findObject.execute("leave_request", {
           employee: { id: employee[0].id },
           stats: "Approved",
@@ -134,7 +154,8 @@ class AttendanceUseCase {
             timeRecStats,
             attendance,
             query,
-            listofSuspension
+            listofSuspension,
+            deviceTime[1]
           );
         }
 
@@ -145,15 +166,28 @@ class AttendanceUseCase {
             (sched) => sched.day === dayToDay
           );
           if (Array.isArray(employee[0].schedule) && schedule) {
-            console.log("Attendance: ", attendance);
+            // console.log("Attendance: ", attendance);
             await upsertObject.execute("daily_time_record", attendance);
+            if (
+              attendance.timeOut !== "--:--" &&
+              employee[0]?.employmentStatus === "Permanent"
+            ) {
+              await handleLeaveWithPay(
+                findObject,
+                upsertObject,
+                convertTo24HourTime,
+                attendance,
+                schedule,
+                dailyTimeRec
+              );
+            }
             timeRecStats = []; // Reset timeRecStats after processing
             total++;
           } else {
             console.log("Assign Schedule First");
           }
         } catch (error) {
-          console.error("Error saving attendance record: ", error);
+          return Promise.reject("Attendace: ", error);
         }
       }
       return `OK: ${total}`;
@@ -221,7 +255,8 @@ class AttendanceUseCase {
     timeRecStats,
     attendance,
     query,
-    listofSuspension
+    listofSuspension,
+    deviceTime
   ) {
     const dayToDay = selectedDay[now.getDay()];
     const schedule = employee[0].schedule.find(
@@ -229,10 +264,9 @@ class AttendanceUseCase {
     );
 
     if (schedule) {
-      const newTimeNow = convertTo24HourTime(this.getCurrentTime());
+      const newTimeNow = convertTo24HourTime(deviceTime);
       const newSchedTimeIN = convertTo24HourTime(schedule.timein);
       const newSchedTimeOUT = convertTo24HourTime(schedule.timeout);
-
       const empName = `${attendance.employee.Firstname} ${attendance.employee.Middlename} ${attendance.employee.surname}`;
       const data = {
         device: query.SN,
@@ -244,17 +278,24 @@ class AttendanceUseCase {
         if (
           newTimeNow.hours > newSchedTimeIN.hours ||
           (newTimeNow.hours === newSchedTimeIN.hours &&
-            newTimeNow.minutes > newSchedTimeIN.minutes + 15)
+            newTimeNow.minutes > newSchedTimeIN.minutes)
         ) {
           timeRecStats.push("LATE");
 
+          const lateMinutes =
+            (newTimeNow.hours - newSchedTimeIN.hours) * 60 +
+            (newTimeNow.minutes - newSchedTimeIN.minutes);
+          console.log("LATE: ", lateMinutes);
+          const conversionValue = this.computeCreditDeduction(lateMinutes);
+          console.log("late Deduction: ", conversionValue);
+          attendance.lateMinutes = conversionValue;
           try {
             await upsertObject.execute("biometric_logs", data);
           } catch (e) {
             console.error(e);
           }
-          // log time in
         }
+        // log time in
       } else if (dailyTimeRec.length > 0) {
         const timeIn = convertTo24HourTime(dailyTimeRec[0].timeIn);
         if (listofSuspension.length > 0) {
@@ -263,7 +304,7 @@ class AttendanceUseCase {
         if (
           timeIn.hours > newSchedTimeIN.hours ||
           (timeIn.hours === newSchedTimeIN.hours &&
-            timeIn.minutes > newSchedTimeIN.minutes + 15)
+            timeIn.minutes > newSchedTimeIN.minutes)
         ) {
           timeRecStats.push("LATE");
         }
@@ -272,9 +313,26 @@ class AttendanceUseCase {
           (newTimeNow.hours === newSchedTimeOUT.hours &&
             newTimeNow.minutes < newSchedTimeOUT.minutes)
         ) {
+          let lateMinutes =
+            (newSchedTimeOUT.hours - newTimeNow.hours) * 60 +
+            (newSchedTimeOUT.minutes - newTimeNow.minutes);
+          if (lateMinutes < 0) {
+            lateMinutes = 0;
+          }
+
+          console.log("UNDERTIME: ", lateMinutes);
+
+          const conversionValue = this.computeCreditDeduction(lateMinutes);
+          console.log("UNDERTIME Deduction: ", conversionValue);
+          const underTime =
+            parseFloat(dailyTimeRec[0].lateMinutes || 0) +
+            parseFloat(conversionValue);
+          console.log("TOTAL Deduction: ", underTime);
+          attendance.lateMinutes = underTime.toFixed(3).toString();
+
           timeRecStats.push("UNDERTIME");
         }
-
+        attendance.isTimeOut = true;
         try {
           (data.logMessage = `Successfully Time Out ${empName}`),
             (data.result = "Time Out"),

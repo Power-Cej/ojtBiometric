@@ -1,8 +1,8 @@
 const fs = require("fs");
 const path = require("path");
 
-async function handleAttPhoto(query, response) {
-  console.log("RESPONSE: ", response);
+async function handleAttPhoto(query, response, sendImage, upsertObject) {
+  // console.log("RESPONSE: ", response);
   // Match PIN, SN, size, and CMD from the response
   const pinMatch = response.match(/PIN=([^\s]+)/);
   const snMatch = response.match(/SN=([^\s]+)/);
@@ -21,35 +21,27 @@ async function handleAttPhoto(query, response) {
     CMD: cmdMatch[1],
   };
 
-  const fileName = line.PIN;
-
-  // Extract image data by splitting at 'uploadphoto'
-  const splitCMD = response.split("CMD=uploadphoto");
-  if (splitCMD.length < 2) {
-    console.error("Error: Image data not found after uploadphoto");
-    return Promise.reject("Image data not found");
-  }
+  const imageDataStartIndex = response.indexOf("CMD=uploadphoto");
 
   // Handle binary data extraction
-  const imageData = splitCMD[1].trim();
+  const imageData = response.substring(
+    imageDataStartIndex + "CMD=uploadphoto ".length
+  );
+  const imageBuffer = Buffer.from(imageData, "binary");
 
-  // Optionally check for encoding or adjust if it's Base64
   try {
-    // If the data is Base64 encoded, use 'base64' instead of 'binary'
-    const imageBuffer = Buffer.from(imageData.trim(), "binary");
-    console.log("imageData: ", imageData);
-
-    // Define the path for saving the image
-    const imageSaved = path.join(__dirname, fileName);
-
-    // Save the image
-    fs.writeFileSync(imageSaved, imageBuffer);
-    console.log(`Image saved as ${fileName}`);
-
+    const response = await sendImage.execute(imageBuffer, line);
+    console.log("RESPONSE: ", response);
+    const faceCapture = {
+      faceCapture: response.url,
+      fileName: response.name,
+    };
+    await upsertObject.execute("biometric_face_capture", faceCapture);
+    // console.log("RESPONSE: ", response);
     return Promise.resolve("OK");
-  } catch (error) {
-    console.error("Error handling image data:", error);
-    return Promise.reject("Error saving image");
+  } catch (e) {
+    console.error("ERROR Upload Image: ", e);
+    return Promise.reject(e);
   }
 }
 

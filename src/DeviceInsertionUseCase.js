@@ -29,8 +29,8 @@ class DeviceInsertionUseCase {
         allDevices.map(async (device) => {
           const updateAt = new Date(device.update);
           const timeDiffInSeconds = (dateNow - updateAt) / 1000;
-          // Device updateAt is within 50 seconds, mark as offline
-          if (device.serialNum !== query.SN && timeDiffInSeconds > 50) {
+          // Device updateAt is within 1 minute, mark as offline
+          if (device.serialNum !== query.SN && timeDiffInSeconds > 1000) {
             device.stats = "offline";
           } else {
             device.stats = "online";

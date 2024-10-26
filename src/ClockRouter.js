@@ -16,6 +16,7 @@ const { ClearLogsDeviceCommand } = require("./request/RebootDeviceCommand");
 const RemoveUserCommand = require("./request/RemoveUserCommand");
 const handleAttPhoto = require("./received/handleAttPhoto");
 const handleOperationLog = require("./received/handleOperationLog");
+const SaveImageUseCase = require("./SaveImageUseCase");
 
 const findObject = new FindObjectUseCase();
 const deviceInsertionObject = new DeviceInsertionUseCase();
@@ -23,6 +24,7 @@ const deviceOjbect = new DeviceUseCase();
 const upsertObject = new UpsertUseCase();
 const attendance = new AttendanceUseCase();
 const register = new RegisterEmployeeUseCase();
+const saveImage = new SaveImageUseCase();
 
 class FunctionsRouter extends PromiseRouter {
   constructor() {
@@ -36,7 +38,6 @@ class FunctionsRouter extends PromiseRouter {
   async handleHandshake(req) {
     const query = queryToJson(req.query);
     const handshake = new HandShakeUseCase();
-    console.log("handSha: ", query);
     return handshake.execute(query);
   }
 
@@ -72,7 +73,7 @@ class FunctionsRouter extends PromiseRouter {
           return this.handleOperationUpload(query, payloads);
         }
       case "ATTPHOTO":
-        return handleAttPhoto(query, req.body);
+        return handleAttPhoto(query, req.body, saveImage, upsert);
 
       default:
         return Promise.resolve("OK");
@@ -93,9 +94,6 @@ class FunctionsRouter extends PromiseRouter {
     const deviceInfo = query?.INFO?.split(",") || "";
     console.log("QUERY: ", query);
 
-    // handleAttPhoto();
-
-    // return `C:1:DATA DELETE ATTPHOTO PIN=${30}`;
     // Function to find the last non-empty field
     const fields = [
       "region",
@@ -139,10 +137,12 @@ class FunctionsRouter extends PromiseRouter {
 
       if (devices.length > 0) {
         // Check if query.SN is inside the array
-        const findEmployee = users.find(
+        const findEmployee = users.filter(
           (item) =>
             item.employee[field] === usersQuery?.result ||
-            (Array.isArray(item.serialNum) && item.serialNum.includes(query.SN))
+            (Array.isArray(item.serialNum) &&
+              item.serialNum.includes(query.SN) &&
+              item.isRemoved === false)
         );
 
         if (users.length > 0) {
@@ -150,14 +150,17 @@ class FunctionsRouter extends PromiseRouter {
           await deviceOjbect.execute(query, devices, deviceInfo);
 
           // remove Data to the Device
-          if (users[0].isRemoved === true) {
-            const removed = RemoveUserCommand(users, upsertObject);
+          const removeUser = users.filter(
+            (user) => user.isRemoved === true && user.removedSN === query.SN
+          );
+          if (removeUser.length > 0) {
+            const removed = RemoveUserCommand(removeUser, upsertObject);
             return removed;
           }
 
           // insert Data to the device
-          if (findEmployee && Object.keys(findEmployee).length > 0) {
-            return SendUserCommand(users);
+          if (findEmployee.length > 0) {
+            return SendUserCommand(findEmployee);
           }
         } else {
           // reboot device
