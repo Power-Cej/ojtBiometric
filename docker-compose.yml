@@ -16,7 +16,7 @@ services:
 
     labels:
       - traefik.enable=true
-      - traefik.http.services.hris-biometric.loadbalancer.server.port=80
+      - traefik.http.services.hris-biometric.loadbalancer.server.port=8081
       - traefik.http.routers.hris-biometric.rule=Host("hris.biometric.mweeb.com")
       - traefik.http.routers.hris-biometric.entrypoints=web
       - traefik.http.routers.hris-biometric_secured.rule=Host("hris.biometric.mweeb.com")
