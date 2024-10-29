@@ -1,0 +1,31 @@
+version: "3"
+
+services:
+  nodejs:
+    container_name: "hris-biometric"
+    image: node:20.12.1
+    restart: always
+    working_dir: /api
+    volumes:
+      - ./:/api
+    command: bash -c "npm install && npm start"
+    ports:
+     - "80:80"
+    environment:
+      - PORT=80
+
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.hris-biometric.loadbalancer.server.port=80
+      - traefik.http.routers.hris-biometric.rule=Host("hris.biometric.mweeb.com")
+      - traefik.http.routers.hris-biometric.entrypoints=web
+      - traefik.http.routers.hris-biometric_secured.rule=Host("hris.biometric.mweeb.com")
+      - traefik.http.routers.hris-biometric_secured.entrypoints=websecure
+      - traefik.http.routers.hris-biometric_secured.tls.certresolver=myhttpchallenge
+      - traefik.http.routers.hris-biometric.middlewares=redirect@file
+
+
+networks:
+  default:
+    external:
+      name: server-network
