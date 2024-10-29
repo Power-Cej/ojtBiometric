@@ -10,7 +10,7 @@ services:
       - ./:/api
     command: bash -c "npm install && npm start"
     ports:
-     - "8080:8081"
+     - "8081:8081"
     environment:
       - PORT=8081
 
