@@ -12,7 +12,7 @@ services:
     ports:
      - "8080:80"
     environment:
-      - PORT=80
+      - PORT=8081
 
     labels:
       - traefik.enable=true
