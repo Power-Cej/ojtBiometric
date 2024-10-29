@@ -2,8 +2,7 @@ function RemoveUserCommand(users, upsertObject) {
   return users
     .map((user, index) => {
       user.isRemoved = false;
-      user.removedSN = 0;
-      upsertObject.execute("users", user);
+      user.removedSN = [];
 
       const removeData = {
         pin: user.employee.agency,
@@ -16,6 +15,7 @@ function RemoveUserCommand(users, upsertObject) {
         `C:${cValue}:DATA DELETE USERINFO PIN=${removeData.pin}\n` +
         deleteUserPhoto;
       console.log("DELETE: ", deleteCommand);
+      // upsertObject.execute("users", user);
       return deleteCommand;
     })
     .join("\n");

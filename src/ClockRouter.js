@@ -151,7 +151,11 @@ class FunctionsRouter extends PromiseRouter {
 
           // remove Data to the Device
           const removeUser = users.filter(
-            (user) => user.isRemoved === true && user.removedSN === query.SN
+            (user) =>
+              // user.employee[field] !== usersQuery.result ||
+              Array.isArray(user.removedSN) &&
+              user.removedSN.includes(query.SN) &&
+              user.isRemoved === true
           );
           if (removeUser.length > 0) {
             const removed = RemoveUserCommand(removeUser, upsertObject);
