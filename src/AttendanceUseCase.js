@@ -100,26 +100,34 @@ class AttendanceUseCase {
       if (userID === "undefined") {
         return Promise.resolve("OK");
       } else {
-        const [employee, dailyTimeRec, listofHolidays, listofSuspension] =
-          await Promise.all([
-            findObject.execute("employees", {
-              agency: Number(userID),
-            }),
-            findObject.execute("daily_time_record", {
-              date: this.getCurrentDate(),
-              employee: { agency: Number(userID) },
-            }),
-            findObject.execute("holidays", { date: this.getCurrentDate() }),
-            findObject.execute("suspension", {
-              status: "active",
-              dateFrom: {
-                $lte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
-              },
-              dateTo: {
-                $gte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
-              },
-            }),
-          ]);
+        const [
+          employee,
+          dailyTimeRec,
+          listofHolidays,
+          listofSuspension,
+          daily_time_record,
+        ] = await Promise.all([
+          findObject.execute("employees", {
+            agency: Number(userID),
+          }),
+          findObject.execute("daily_time_record", {
+            date: this.getCurrentDate(),
+            employee: { agency: Number(userID) },
+          }),
+          findObject.execute("holidays", { date: this.getCurrentDate() }),
+          findObject.execute("suspension", {
+            status: "active",
+            dateFrom: {
+              $lte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
+            },
+            dateTo: {
+              $gte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
+            },
+          }),
+          findObject.execute("daily_time_record", {
+            employee: { agency: Number(userID) },
+          }),
+        ]);
         const listofLeaves = await findObject.execute("leave_request", {
           employee: { id: employee[0].id },
           stats: "Approved",
@@ -178,7 +186,9 @@ class AttendanceUseCase {
                 convertTo24HourTime,
                 attendance,
                 schedule,
-                dailyTimeRec
+                dailyTimeRec,
+                employee,
+                daily_time_record
               );
             }
             timeRecStats = []; // Reset timeRecStats after processing
@@ -324,10 +334,18 @@ class AttendanceUseCase {
 
           const conversionValue = this.computeCreditDeduction(lateMinutes);
           console.log("UNDERTIME Deduction: ", conversionValue);
-          const underTime =
-            parseFloat(dailyTimeRec[0].lateMinutes || 0) +
-            parseFloat(conversionValue);
-          console.log("TOTAL Deduction: ", underTime);
+          let underTime;
+          if (dailyTimeRec[0].isTimeOut === true) {
+            underTime =
+              parseFloat(dailyTimeRec[0].lateMinutes || 0) -
+              parseFloat(conversionValue);
+            console.log("TOTAL Repeated out: ", underTime);
+          } else {
+            underTime =
+              parseFloat(dailyTimeRec[0].lateMinutes || 0) +
+              parseFloat(conversionValue);
+            console.log("TOTAL First out: ", underTime);
+          }
           attendance.lateMinutes = underTime.toFixed(3).toString();
 
           timeRecStats.push("UNDERTIME");

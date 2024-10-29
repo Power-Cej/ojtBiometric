@@ -4,8 +4,29 @@ async function handleLeaveWithPay(
   convertTo24HourTime,
   attendance,
   schedule,
-  dailyTimeRec
+  dailyTimeRec,
+  employee,
+  daily_time_record
 ) {
+  const computeCreditAddtion = (recordLength) => {
+    let conversionValue = 0.0;
+
+    for (let i = 1; i <= recordLength; i++) {
+      // Reset the conversion value at the start of each 30-day cycle
+      if ((i - 1) % 30 === 0) {
+        conversionValue = 0.042; // Reset conversionValue to 0.042 at the start of each cycle
+      } else if (i % 30 === 2) {
+        conversionValue += 0.041; // Add 0.041 for the second day of each cycle
+      } else if (((i % 30) - 2) % 3 === 1 || ((i % 30) - 2) % 3 === 2) {
+        conversionValue += 0.042; // Add 0.042 on the 3rd, 4th, 6th, 7th, etc., within each cycle
+      } else {
+        conversionValue += 0.041; // Add 0.041 on the 5th, 8th, etc., within each cycle
+      }
+    }
+
+    return conversionValue.toFixed(3);
+  };
+
   const computeCreditDeduction = (undertimeMinutes) => {
     let conversionValue = 0.0;
 
@@ -26,11 +47,11 @@ async function handleLeaveWithPay(
 
     return conversionValue.toFixed(3).toString();
   };
-
   const leaveCred = await findObject.execute("leave_cred", {
     email: attendance.employee.email,
-    type: "Leave (WP)",
+    type: "Leave Credits",
   });
+
   const lateMinutes = parseFloat(attendance.lateMinutes);
   if (leaveCred.length > 0) {
     // user timeOut Again
@@ -94,18 +115,22 @@ async function handleLeaveWithPay(
       deductedData = 0;
     }
     console.log("late: ", lateMinutes);
-    const addFixCred = parseFloat(deductedData) + 0.042;
+    const addCred = computeCreditAddtion(daily_time_record.length);
+    console.log("ADD CRED: ", addCred);
+    const addFixCred = parseFloat(deductedData) + addCred;
     leaveCred[0].current = addFixCred.toFixed(3).toString();
     console.log("TOTAL: ", addFixCred);
     await upsertObject.execute("leave_cred", leaveCred[0]);
   } else {
-    let addFixCred = 0.042 - lateMinutes;
+    const addCred = computeCreditAddtion(daily_time_record.length);
+    console.log("ADD CRED: ", addCred);
+    let addFixCred = addCred - lateMinutes;
     if (addFixCred < 0) {
       addFixCred = 0;
     }
     const addCredit = {
       current: addFixCred.toFixed(3).toString(),
-      type: "Leave (WP)",
+      type: "Leave Credits",
       email: employee[0].email,
     };
     await upsertObject.execute("leave_cred", addCredit);

@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-async function handleAttPhoto(query, response, sendImage, upsertObject) {
+async function handleAttPhoto(response, sendImage, upsertObject) {
   // console.log("RESPONSE: ", response);
   // Match PIN, SN, size, and CMD from the response
   const pinMatch = response.match(/PIN=([^\s]+)/);
