@@ -174,7 +174,6 @@ class AttendanceUseCase {
             (sched) => sched.day === dayToDay
           );
           if (Array.isArray(employee[0].schedule) && schedule) {
-            // console.log("Attendance: ", attendance);
             await upsertObject.execute("daily_time_record", attendance);
             if (
               attendance.timeOut !== "--:--" &&
@@ -277,7 +276,9 @@ class AttendanceUseCase {
       const newTimeNow = convertTo24HourTime(deviceTime);
       const newSchedTimeIN = convertTo24HourTime(schedule.timein);
       const newSchedTimeOUT = convertTo24HourTime(schedule.timeout);
-      const empName = `${attendance.employee.Firstname} ${attendance.employee.Middlename} ${attendance.employee.surname}`;
+      const empName = `${attendance?.employee?.Firstname} ${
+        attendance?.employee?.Middlename || ""
+      } ${attendance?.employee?.surname}`;
       const data = {
         device: query.SN,
         logMessage: `Successfully Time In ${empName}`,

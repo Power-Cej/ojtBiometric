@@ -20,7 +20,9 @@ class RegisterEmployeeUseCase {
     });
     const empName =
       employee.length > 0 &&
-      `${employee[0].Firstname} ${employee[0].Middlename} ${employee[0].surname}`;
+      `${employee[0]?.Firstname} ${employee[0]?.Middlename || ""} ${
+        employee[0]?.surname
+      }`;
     const data = {
       device: query.SN,
       logMessage: `Successfully biometric registration user ${empName}`,

@@ -7,7 +7,9 @@ async function handleOperationLog(query, lines, findObject, upsertObject) {
     });
     const empName =
       employee.length > 0
-        ? `${employee[0].Firstname} ${employee[0].Middlename} ${employee[0].surname}`
+        ? `${employee[0]?.Firstname} ${employee[0]?.Middlename || ""} ${
+            employee[0]?.surname
+          }`
         : line[3];
     const data = {
       device: query.SN,

@@ -49,7 +49,7 @@ async function handleLeaveWithPay(
   };
   const leaveCred = await findObject.execute("leave_cred", {
     email: attendance.employee.email,
-    type: "Leave Credits",
+    type: "Vacation Leave",
   });
 
   const lateMinutes = parseFloat(attendance.lateMinutes);
@@ -107,7 +107,8 @@ async function handleLeaveWithPay(
 
     // user First time Out
 
-    let deductedData = parseFloat(leaveCred[0].current) - lateMinutes;
+    let deductedData =
+      parseFloat(leaveCred[0].current) - parseFloat(lateMinutes);
 
     console.log("DEDUCTED: ", deductedData);
 
@@ -116,11 +117,12 @@ async function handleLeaveWithPay(
     }
     console.log("late: ", lateMinutes);
     const addCred = computeCreditAddtion(daily_time_record.length);
-    console.log("ADD CRED: ", addCred);
-    const addFixCred = parseFloat(deductedData) + addCred;
-    leaveCred[0].current = addFixCred.toFixed(3).toString();
+    console.log("ADD CRED: ", parseFloat(deductedData));
+    const addFixCred = parseFloat(deductedData) + parseFloat(addCred);
     console.log("TOTAL: ", addFixCred);
+    leaveCred[0].current = addFixCred.toFixed(3).toString();
     await upsertObject.execute("leave_cred", leaveCred[0]);
+    return Promise.resolve("OK");
   } else {
     const addCred = computeCreditAddtion(daily_time_record.length);
     console.log("ADD CRED: ", addCred);
@@ -129,11 +131,17 @@ async function handleLeaveWithPay(
       addFixCred = 0;
     }
     const addCredit = {
-      current: addFixCred.toFixed(3).toString(),
-      type: "Leave Credits",
       email: employee[0].email,
     };
-    await upsertObject.execute("leave_cred", addCredit);
+
+    const vacationLeave = {
+      ...addCredit,
+      current: addFixCred.toFixed(3).toString(),
+      type: "Vacation Leave",
+    };
+    const sickLeave = { ...addCredit, current: addCred, type: "Sick Leave" };
+    await upsertObject.execute("leave_cred", vacationLeave);
+    await upsertObject.execute("leave_cred", sickLeave);
   }
 }
 
