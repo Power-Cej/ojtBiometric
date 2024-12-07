@@ -36,7 +36,7 @@ class FunctionsRouter extends PromiseRouter {
   }
 
   async handleHandshake(req) {
-    console.log("req", req);
+    // console.log("req", req);
     const query = queryToJson(req.query);
     const handshake = new HandShakeUseCase();
     return handshake.execute(query);
