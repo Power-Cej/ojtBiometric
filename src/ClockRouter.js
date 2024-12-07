@@ -36,6 +36,7 @@ class FunctionsRouter extends PromiseRouter {
   }
 
   async handleHandshake(req) {
+    console.log("req", req);
     const query = queryToJson(req.query);
     const handshake = new HandShakeUseCase();
     return handshake.execute(query);
@@ -88,6 +89,7 @@ class FunctionsRouter extends PromiseRouter {
 
   async handleRequest(req) {
     const query = queryToJson(req.query);
+    console.log("query", query);
     const devices = await findObject.execute("devices", {
       serialNum: query.SN,
     });
