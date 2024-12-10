@@ -173,6 +173,9 @@ class AttendanceUseCase {
           const schedule = employee[0].schedule.find(
             (sched) => sched.day === dayToDay
           );
+          console.log("attendance get: ", attendance);
+          console.log("emppp", Array.isArray(employee[0].schedule));
+          console.log("scheddd", schedule);
           if (Array.isArray(employee[0].schedule) && schedule) {
             await upsertObject.execute("daily_time_record", attendance);
             if (
