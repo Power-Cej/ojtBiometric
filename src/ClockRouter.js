@@ -142,9 +142,7 @@ class FunctionsRouter extends PromiseRouter {
         const findEmployee = users.filter(
           (item) =>
             item.employee[field] === usersQuery?.result ||
-            (Array.isArray(item.serialNum) &&
-              item.serialNum.includes(query.SN) &&
-              item.isRemoved === false)
+            (Array.isArray(item.serialNum) && item.serialNum.includes(query.SN))
         );
 
         if (users.length > 0) {
@@ -155,9 +153,7 @@ class FunctionsRouter extends PromiseRouter {
           const removeUser = users.filter(
             (user) =>
               // user.employee[field] !== usersQuery.result ||
-              Array.isArray(user.removedSN) &&
-              user.removedSN.includes(query.SN) &&
-              user.isRemoved === true
+              Array.isArray(user.removedSN) && user.removedSN.includes(query.SN)
           );
           if (removeUser.length > 0) {
             const removed = RemoveUserCommand(removeUser, upsertObject);
