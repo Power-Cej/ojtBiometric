@@ -18,6 +18,22 @@ const findObject = new FindObjectUseCase();
 const upsertObject = new UpsertUseCase();
 const now = new Date();
 
+function convertTo24Hour(time) {
+  const [timePart, meridian] = time.split(" "); // Split the time and AM/PM
+  let [hour, minute] = timePart.split(":").map(Number);
+
+  if (meridian === "PM" && hour !== 12) {
+    hour += 12; // Add 12 to convert PM times except 12 PM
+  } else if (meridian === "AM" && hour === 12) {
+    hour = 0; // Convert 12 AM to 0 (midnight)
+  }
+
+  // Return in 24-hour format with zero-padding for hours and minutes
+  return `${hour.toString().padStart(2, "0")}:${minute
+    .toString()
+    .padStart(2, "0")}`;
+}
+
 function convertTo24HourTime(time) {
   const [timePart, modifier] = time.split(" ");
   let [hours, minutes] = timePart.split(":").map(Number);
@@ -28,6 +44,31 @@ function convertTo24HourTime(time) {
     hours = 0;
   }
   return { hours, minutes };
+}
+
+function getOvertimeDuration(timeIn, timeOut) {
+  console.log("TIMEIN: ", timeIn);
+  console.log("TIMEOUT: ", timeOut);
+  const [timeInHour, timeInMinute, timeInSecond] = timeIn
+    .split(":")
+    .map(Number);
+  const [timeOutHour, timeOutMinute, timeOutSecond] = timeOut
+    .split(":")
+    .map(Number);
+
+  // Convert timeIn and timeOut to seconds
+  const timeInSeconds = timeInHour * 3600 + timeInMinute * 60 + timeInSecond;
+  const timeOutSeconds =
+    timeOutHour * 3600 + timeOutMinute * 60 + timeOutSecond;
+
+  // Calculate the difference in seconds
+  const durationInSeconds = timeOutSeconds - timeInSeconds;
+
+  let plainHours = Math.floor(durationInSeconds / 3600);
+  if (plainHours < 0) {
+    plainHours = "0";
+  }
+  return plainHours.toString(); // Assign to data.overtime
 }
 
 class AttendanceUseCase {
@@ -173,15 +214,17 @@ class AttendanceUseCase {
           const schedule = employee[0].schedule.find(
             (sched) => sched.day === dayToDay
           );
-          console.log("attendance get: ", attendance);
-          console.log("emppp", Array.isArray(employee[0].schedule));
-          console.log("scheddd", schedule);
+          // console.log("attendance get: ", attendance);
+          // console.log("emppp", Array.isArray(employee[0].schedule));
+          // console.log("scheddd", schedule);
           if (Array.isArray(employee[0].schedule) && schedule) {
-            await upsertObject.execute("daily_time_record", attendance);
             if (
               attendance.timeOut !== "--:--" &&
               employee[0]?.employmentStatus === "Permanent"
             ) {
+              const scheduleTimeOut24H = `${convertTo24Hour(
+                schedule.timeout
+              )}:00`;
               await handleLeaveWithPay(
                 findObject,
                 upsertObject,
@@ -190,11 +233,15 @@ class AttendanceUseCase {
                 schedule,
                 dailyTimeRec,
                 employee,
-                daily_time_record
+                daily_time_record,
+                getOvertimeDuration,
+                scheduleTimeOut24H
               );
+              // return;
+              return Promise.resolve("OK");
             }
-            timeRecStats = []; // Reset timeRecStats after processing
-            total++;
+            await upsertObject.execute("daily_time_record", attendance);
+            return Promise.resolve("OK");
           } else {
             console.log("Assign Schedule First");
           }
@@ -300,6 +347,7 @@ class AttendanceUseCase {
             (newTimeNow.hours - newSchedTimeIN.hours) * 60 +
             (newTimeNow.minutes - newSchedTimeIN.minutes);
           console.log("LATE: ", lateMinutes);
+
           const conversionValue = this.computeCreditDeduction(lateMinutes);
           console.log("late Deduction: ", conversionValue);
           attendance.lateMinutes = conversionValue;
@@ -312,6 +360,7 @@ class AttendanceUseCase {
         // log time in
       } else if (dailyTimeRec.length > 0) {
         const timeIn = convertTo24HourTime(dailyTimeRec[0].timeIn);
+        const timeOut = convertTo24HourTime(dailyTimeRec[0].timeOut);
         if (listofSuspension.length > 0) {
           timeRecStats.push("SUSPENDED");
         }
@@ -322,38 +371,66 @@ class AttendanceUseCase {
         ) {
           timeRecStats.push("LATE");
         }
+
+        let lateMinutes =
+          (newSchedTimeOUT.hours - newTimeNow.hours) * 60 +
+          (newSchedTimeOUT.minutes - newTimeNow.minutes);
+
+        if (lateMinutes < 0) {
+          lateMinutes = 0;
+        }
+
+        let stillLate =
+          (newSchedTimeOUT.hours - timeOut.hours) * 60 +
+            (newSchedTimeOUT.minutes - timeOut.minutes) || 0;
+        if (stillLate < 0) {
+          stillLate = 0;
+        }
+
         if (
           newTimeNow.hours < newSchedTimeOUT.hours ||
           (newTimeNow.hours === newSchedTimeOUT.hours &&
             newTimeNow.minutes < newSchedTimeOUT.minutes)
         ) {
-          let lateMinutes =
+          lateMinutes =
             (newSchedTimeOUT.hours - newTimeNow.hours) * 60 +
             (newSchedTimeOUT.minutes - newTimeNow.minutes);
-          if (lateMinutes < 0) {
-            lateMinutes = 0;
-          }
+          stillLate =
+            (newTimeNow.hours - timeOut.hours) * 60 +
+            (newTimeNow.minutes - timeOut.minutes);
 
-          console.log("UNDERTIME: ", lateMinutes);
-
-          const conversionValue = this.computeCreditDeduction(lateMinutes);
-          console.log("UNDERTIME Deduction: ", conversionValue);
-          let underTime;
-          if (dailyTimeRec[0].isTimeOut === true) {
-            underTime =
-              parseFloat(dailyTimeRec[0].lateMinutes || 0) -
-              parseFloat(conversionValue);
-            console.log("TOTAL Repeated out: ", underTime);
-          } else {
-            underTime =
-              parseFloat(dailyTimeRec[0].lateMinutes || 0) +
-              parseFloat(conversionValue);
-            console.log("TOTAL First out: ", underTime);
-          }
-          attendance.lateMinutes = underTime.toFixed(3).toString();
-
+          // if (dailyTimeRec[0].isTimeOut === true) {
+          //   underTime = parseFloat(dailyTimeRec[0].lateMinutes || 0);
+          //   attendance.newlyHiredDeduct = dailyTimeRec[0].newlyHiredDeduct;
+          // } else {
+          //   underTime =
+          //     parseFloat(dailyTimeRec[0].lateMinutes || 0) +
+          //     parseFloat(conversionValue);
+          // }
           timeRecStats.push("UNDERTIME");
         }
+        const conversionValue = this.computeCreditDeduction(lateMinutes);
+        let underTime = 0;
+
+        if (dailyTimeRec[0].isTimeOut === true) {
+          const late = this.computeCreditDeduction(stillLate);
+          underTime =
+            parseFloat(dailyTimeRec[0].lateMinutes || 0) - parseFloat(late);
+          console.log("TOTAL Repeated out: ", underTime);
+        } else {
+          underTime =
+            parseFloat(dailyTimeRec[0].lateMinutes || 0) +
+            parseFloat(conversionValue);
+          console.log("TOTAL First out: ", underTime);
+        }
+        if (underTime < 0) {
+          underTime = 0;
+        }
+
+        attendance.lateMinutes = underTime.toFixed(3).toString();
+        attendance.newlyHiredDeduct =
+          attendance.newlyHiredDeduct - this.computeCreditDeduction(stillLate);
+        attendance.stillLate = this.computeCreditDeduction(stillLate);
         attendance.isTimeOut = true;
         try {
           (data.logMessage = `Successfully Time Out ${empName}`),

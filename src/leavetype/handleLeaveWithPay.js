@@ -2,30 +2,35 @@ async function handleLeaveWithPay(
   findObject,
   upsertObject,
   convertTo24HourTime,
-  attendance,
+  attendanceRec,
   schedule,
   dailyTimeRec,
   employee,
-  daily_time_record
+  daily_time_record,
+  getOvertimeDuration,
+  scheduleTimeOut24H
 ) {
-  const computeCreditAddtion = (recordLength) => {
-    let conversionValue = 0.0;
+  const late = attendanceRec.stillLate;
+  const { stillLate, ...attendance } = attendanceRec;
 
-    for (let i = 1; i <= recordLength; i++) {
-      // Reset the conversion value at the start of each 30-day cycle
-      if ((i - 1) % 30 === 0) {
-        conversionValue = 0.042; // Reset conversionValue to 0.042 at the start of each cycle
-      } else if (i % 30 === 2) {
-        conversionValue += 0.041; // Add 0.041 for the second day of each cycle
-      } else if (((i % 30) - 2) % 3 === 1 || ((i % 30) - 2) % 3 === 2) {
-        conversionValue += 0.042; // Add 0.042 on the 3rd, 4th, 6th, 7th, etc., within each cycle
-      } else {
-        conversionValue += 0.041; // Add 0.041 on the 5th, 8th, etc., within each cycle
-      }
-    }
+  // const computeCreditAddtion = (recordLength) => {
+  //   let conversionValue = 0.0;
 
-    return conversionValue.toFixed(3);
-  };
+  //   for (let i = 1; i <= recordLength; i++) {
+  //     // Reset the conversion value at the start of each 30-day cycle
+  //     if ((i - 1) % 30 === 0) {
+  //       conversionValue = 0.042; // Reset conversionValue to 0.042 at the start of each cycle
+  //     } else if (i % 30 === 2) {
+  //       conversionValue += 0.041; // Add 0.041 for the second day of each cycle
+  //     } else if (((i % 30) - 2) % 3 === 1 || ((i % 30) - 2) % 3 === 2) {
+  //       conversionValue += 0.042; // Add 0.042 on the 3rd, 4th, 6th, 7th, etc., within each cycle
+  //     } else {
+  //       conversionValue += 0.041; // Add 0.041 on the 5th, 8th, etc., within each cycle
+  //     }
+  //   }
+
+  //   return conversionValue.toFixed(3);
+  // };
 
   const computeCreditDeduction = (undertimeMinutes) => {
     let conversionValue = 0.0;
@@ -52,7 +57,9 @@ async function handleLeaveWithPay(
     type: "Vacation Leave",
   });
 
-  const lateMinutes = parseFloat(attendance.lateMinutes);
+  let lateMinutes = parseFloat(attendance?.lateMinutes);
+  let leaveCredits = leaveCred[0];
+  let newlyHiredDeducted = parseFloat(attendance?.lateMinutes);
   if (leaveCred.length > 0) {
     // user timeOut Again
     if (dailyTimeRec[0]?.isTimeOut === true) {
@@ -63,7 +70,6 @@ async function handleLeaveWithPay(
         (scheduleTimeOut.hours === atendanceTimeOut.hours &&
           scheduleTimeOut.minutes >= atendanceTimeOut.minutes);
 
-      console.log("isUndertime: ", isStillUndertimme);
       const recentTimeOut = convertTo24HourTime(dailyTimeRec[0].timeOut);
 
       const differenceInMinutes = Math.abs(
@@ -71,36 +77,70 @@ async function handleLeaveWithPay(
           atendanceTimeOut.minutes -
           (recentTimeOut.hours * 60 + recentTimeOut.minutes)
       );
-
-      console.log("Difference: ", differenceInMinutes);
-      const backCredits = parseFloat(
-        computeCreditDeduction(differenceInMinutes)
-      );
-
-      const currentCredit = parseFloat(leaveCred[0].current);
-      console.log("BACK CRED: ", backCredits);
-      console.log("CURRENT CRED: ", currentCredit);
+      let minDeduct =
+        parseFloat(computeCreditDeduction(differenceInMinutes)) - late;
+      let newlyHiredDeduct = 0;
 
       if (isStillUndertimme) {
-        const addCredit = backCredits + currentCredit;
+        if (parseFloat(attendance.newlyHiredDeduct) !== 0) {
+          newlyHiredDeduct =
+            parseFloat(attendance?.newlyHiredDeduct) - minDeduct;
+        }
+        let backDedection = parseFloat(leaveCred[0].current);
+        console.log("LEAVVVVVVV: ", parseFloat(attendance?.newlyHiredDeduct));
+        console.log("MINNNN: ", minDeduct);
+        console.log("NEWLY: ", newlyHiredDeduct);
 
-        leaveCred[0].current = addCredit.toFixed(3).toString();
-        console.log("ADDED: ", leaveCred[0].current);
-        await upsertObject.execute("leave_cred", leaveCred[0]);
-      } else {
+        if (newlyHiredDeduct < 0) {
+          backDedection =
+            parseFloat(leaveCred[0].current) + Math.abs(newlyHiredDeduct);
+          newlyHiredDeduct = 0;
+        }
+        leaveCred[0].current = backDedection.toFixed(3);
+        leaveCredits = leaveCred[0];
+      }
+      // not late
+      else {
         const differenceFromSched =
           scheduleTimeOut.hours * 60 +
           scheduleTimeOut.minutes -
           (recentTimeOut.hours * 60 + recentTimeOut.minutes);
 
-        const backCredits = parseFloat(
-          computeCreditDeduction(differenceFromSched)
+        minDeduct =
+          parseFloat(computeCreditDeduction(differenceFromSched)) - late;
+        let backCredits = minDeduct;
+
+        if (parseFloat(attendance.newlyHiredDeduct) !== 0) {
+          backCredits = parseFloat(attendance?.newlyHiredDeduct) - minDeduct;
+        }
+        let backDedection = parseFloat(leaveCred[0].current) + backCredits;
+        if (backCredits < 0) {
+          backDedection =
+            parseFloat(leaveCred[0].current) + Math.abs(backCredits);
+          // console.log("BACK: ", newlyHiredDeduct);
+        }
+        leaveCred[0].current = backDedection.toFixed(3);
+        leaveCredits = leaveCred[0];
+        newlyHiredDeduct = 0;
+      }
+      attendance.newlyHiredDeduct = newlyHiredDeduct.toFixed(3);
+      attendance.lateMinutes = lateMinutes.toFixed(3);
+      console.log("NEWLYHIRED? : ", newlyHiredDeduct);
+      console.log("Atten: ", attendance);
+      console.log("CREDIT: ", leaveCredits);
+
+      try {
+        if (leaveCredits !== undefined) {
+          await upsertObject.execute("leave_cred", leaveCredits);
+        }
+        attendance.overtime = getOvertimeDuration(
+          scheduleTimeOut24H,
+          attendance.timeOut
         );
-        console.log("SCHED DIFFERENCE: ", differenceFromSched);
-        const addCredit = backCredits + currentCredit;
-        leaveCred[0].current = addCredit.toFixed(3).toString();
-        console.log("ADDED NOT UNDER: ", leaveCred[0].current);
-        await upsertObject.execute("leave_cred", leaveCred[0]);
+        await upsertObject.execute("daily_time_record", attendance);
+        return Promise.resolve("OK");
+      } catch (e) {
+        Promise.reject(e);
       }
       return Promise.resolve("OK");
     }
@@ -109,39 +149,32 @@ async function handleLeaveWithPay(
 
     let deductedData =
       parseFloat(leaveCred[0].current) - parseFloat(lateMinutes);
-
-    console.log("DEDUCTED: ", deductedData);
-
     if (deductedData < 0) {
+      newlyHiredDeducted = Math.abs(deductedData);
       deductedData = 0;
+    } else {
+      newlyHiredDeducted = 0;
     }
-    console.log("late: ", lateMinutes);
-    const addCred = computeCreditAddtion(daily_time_record.length);
-    console.log("ADD CRED: ", parseFloat(deductedData));
-    const addFixCred = parseFloat(deductedData) + parseFloat(addCred);
-    console.log("TOTAL: ", addFixCred);
-    leaveCred[0].current = addFixCred.toFixed(3).toString();
-    await upsertObject.execute("leave_cred", leaveCred[0]);
+    leaveCred[0].current = deductedData.toFixed(3);
+    leaveCredits = leaveCred[0];
+  }
+  attendance.newlyHiredDeduct = newlyHiredDeducted.toFixed(3);
+  attendance.lateMinutes = lateMinutes.toFixed(3);
+  try {
+    if (leaveCredits !== undefined) {
+      console.log("Credit : ", leaveCredits);
+      await upsertObject.execute("leave_cred", leaveCredits);
+    }
+    attendance.overtime = getOvertimeDuration(
+      scheduleTimeOut24H,
+      attendance.timeOut
+    );
+    console.log("lateMinutes: ", attendance.lateMinutes);
+    console.log("newlyHiredDeduct: ", attendance.newlyHiredDeduct);
+    await upsertObject.execute("daily_time_record", attendance);
     return Promise.resolve("OK");
-  } else {
-    const addCred = computeCreditAddtion(daily_time_record.length);
-    console.log("ADD CRED: ", addCred);
-    let addFixCred = addCred - lateMinutes;
-    if (addFixCred < 0) {
-      addFixCred = 0;
-    }
-    const addCredit = {
-      email: employee[0].email,
-    };
-
-    const vacationLeave = {
-      ...addCredit,
-      current: addFixCred.toFixed(3).toString(),
-      type: "Vacation Leave",
-    };
-    const sickLeave = { ...addCredit, current: addCred, type: "Sick Leave" };
-    await upsertObject.execute("leave_cred", vacationLeave);
-    await upsertObject.execute("leave_cred", sickLeave);
+  } catch (e) {
+    Promise.reject(e);
   }
 }
 
