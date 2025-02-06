@@ -1,5 +1,4 @@
 function SendUserCommand(users) {
-  console.log("USER: ", users);
   return users
     .map((user, index) => {
       // Create the bioData for each user
