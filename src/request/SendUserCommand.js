@@ -1,10 +1,13 @@
 function SendUserCommand(users) {
+  console.log("USER: ", users);
   return users
     .map((user, index) => {
       // Create the bioData for each user
       const bioData = {
         pin: user.employee.agency,
-        name: user.username,
+        name: `${user.employee.Firstname || ""} ${
+          user.employee.Middlename || ""
+        } ${user.employee.surname || ""}`,
         pass: user.employee.agency,
         pri: "0", // Normal User "0", Registrar "2", Admin "6", Super Admin "14"
         fid: user?.fingerFid,
