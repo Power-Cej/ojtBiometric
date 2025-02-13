@@ -1,6 +1,6 @@
 class HandShakeUseCase {
   execute(query) {
-    console.log(`Received initialization request from `, query);
+    console.log(`Received initialization request from `, query.SN);
     // Respond with configuration settings
     return (
       `GET OPTION FROM: ${query.SN}\r\n` +

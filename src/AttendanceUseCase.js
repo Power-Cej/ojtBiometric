@@ -46,30 +46,30 @@ function convertTo24HourTime(time) {
   return { hours, minutes };
 }
 
-function getOvertimeDuration(timeIn, timeOut) {
-  console.log("TIMEIN: ", timeIn);
-  console.log("TIMEOUT: ", timeOut);
-  const [timeInHour, timeInMinute, timeInSecond] = timeIn
-    .split(":")
-    .map(Number);
-  const [timeOutHour, timeOutMinute, timeOutSecond] = timeOut
-    .split(":")
-    .map(Number);
+// function getOvertimeDuration(timeIn, timeOut) {
+//   console.log("TIMEIN: ", timeIn);
+//   console.log("TIMEOUT: ", timeOut);
+//   const [timeInHour, timeInMinute, timeInSecond] = timeIn
+//     .split(":")
+//     .map(Number);
+//   const [timeOutHour, timeOutMinute, timeOutSecond] = timeOut
+//     .split(":")
+//     .map(Number);
 
-  // Convert timeIn and timeOut to seconds
-  const timeInSeconds = timeInHour * 3600 + timeInMinute * 60 + timeInSecond;
-  const timeOutSeconds =
-    timeOutHour * 3600 + timeOutMinute * 60 + timeOutSecond;
+//   // Convert timeIn and timeOut to seconds
+//   const timeInSeconds = timeInHour * 3600 + timeInMinute * 60 + timeInSecond;
+//   const timeOutSeconds =
+//     timeOutHour * 3600 + timeOutMinute * 60 + timeOutSecond;
 
-  // Calculate the difference in seconds
-  const durationInSeconds = timeOutSeconds - timeInSeconds;
+//   // Calculate the difference in seconds
+//   const durationInSeconds = timeOutSeconds - timeInSeconds;
 
-  let plainHours = Math.floor(durationInSeconds / 3600);
-  if (plainHours < 0) {
-    plainHours = "0";
-  }
-  return plainHours.toString(); // Assign to data.overtime
-}
+//   let plainHours = Math.floor(durationInSeconds / 3600);
+//   if (plainHours < 0) {
+//     plainHours = "0";
+//   }
+//   return plainHours.toString(); // Assign to data.overtime
+// }
 
 class AttendanceUseCase {
   getCurrentDate() {
@@ -135,116 +135,101 @@ class AttendanceUseCase {
         status5,
       ] = line;
 
-      console.log("TIMESTAMP: ", timestamp);
+      // console.log("TIMESTAMP: ", timestamp);
+      console.log("userID: ", userID);
+      // console.log("timeInOutStats: ", timeInOutStats);
       const deviceTime = timestamp.split(" ");
+      //   if (userID === "undefined") {
+      //     return Promise.resolve("OK");
+      //   }
+
+      // const users = findObject.execute("users", {
+      //         companyID: Number(userID),
+      //       })
+
+      //       if(users.length > 0){
+      //         users.map(item => {
+      //           const dailyRec = {
+      //             date: deviceTime[0],
+      //             timeIn: deviceTime[1],
+
+      //           }
+      //         })
+      //       }
 
       if (userID === "undefined") {
         return Promise.resolve("OK");
       } else {
-        const [
-          employee,
-          dailyTimeRec,
-          listofHolidays,
-          listofSuspension,
-          daily_time_record,
-        ] = await Promise.all([
-          findObject.execute("employees", {
-            agency: Number(userID),
-          }),
+        const [dailyTimeRec, users] = await Promise.all([
           findObject.execute("daily_time_record", {
             date: this.getCurrentDate(),
-            employee: { agency: Number(userID) },
           }),
-          findObject.execute("holidays", { date: this.getCurrentDate() }),
-          findObject.execute("suspension", {
-            status: "active",
-            dateFrom: {
-              $lte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
-            },
-            dateTo: {
-              $gte: `${this.suspensionFormat()} at ${this.getCurrentTime()}`,
-            },
-          }),
-          findObject.execute("daily_time_record", {
-            employee: { agency: Number(userID) },
+          findObject.execute("users", {
+            companyID: parseFloat(userID),
           }),
         ]);
-        const listofLeaves = await findObject.execute("leave_request", {
-          employee: { id: employee[0].id },
-          stats: "Approved",
-          startdate: { $lte: this.getCurrentDate() },
-          enddate: { $gte: this.getCurrentDate() },
-        });
-
         const currentYear = now.getFullYear().toString();
         const currentMonth = now.getMonth().toString();
         let timeRecStats = [];
 
         let attendance = this.createAttendanceRecord(
           dailyTimeRec,
-          employee,
+          users[0],
           currentYear,
           currentMonth,
           timeRecStats,
           deviceTime[1]
         );
 
-        if (listofHolidays.length > 0) {
-          this.handleHolidays(listofHolidays, dailyTimeRec, timeRecStats);
-        }
-        if (listofLeaves.length > 0) {
-          this.handleLeaves(listofLeaves, dailyTimeRec, timeRecStats);
-        }
+        // console.log("ATTEN: ", attendance);
+        // return;
 
-        if (this.shouldCheckSchedule(employee, listofHolidays, listofLeaves)) {
-          this.checkSchedule(
-            employee,
-            dailyTimeRec,
-            timeRecStats,
-            attendance,
-            query,
-            listofSuspension,
-            deviceTime[1]
-          );
-        }
+        // if (users.length > 0) {
+        //   this.checkSchedule(
+        //     dailyTimeRec,
+        //     timeRecStats,
+        //     attendance,
+        //     query,
+        //     deviceTime[1]
+        //   );
+        // }
 
         try {
           // console.log("employee: ", employee);
-          const dayToDay = selectedDay[now.getDay()];
-          const schedule = employee[0].schedule.find(
-            (sched) => sched.day === dayToDay
-          );
-          // console.log("attendance get: ", attendance);
-          // console.log("emppp", Array.isArray(employee[0].schedule));
-          // console.log("scheddd", schedule);
-          if (Array.isArray(employee[0].schedule) && schedule) {
-            if (
-              attendance.timeOut !== "--:--" &&
-              employee[0]?.employmentStatus === "Permanent"
-            ) {
-              const scheduleTimeOut24H = `${convertTo24Hour(
-                schedule.timeout
-              )}:00`;
-              await handleLeaveWithPay(
-                findObject,
-                upsertObject,
-                convertTo24HourTime,
-                attendance,
-                schedule,
-                dailyTimeRec,
-                employee,
-                daily_time_record,
-                getOvertimeDuration,
-                scheduleTimeOut24H
-              );
-              // return;
-              return Promise.resolve("OK");
-            }
-            await upsertObject.execute("daily_time_record", attendance);
-            return Promise.resolve("OK");
-          } else {
-            console.log("Assign Schedule First");
-          }
+          // const dayToDay = selectedDay[now.getDay()];
+          // const schedule = employee[0].schedule.find(
+          //   (sched) => sched.day === dayToDay
+          // );
+          // // console.log("attendance get: ", attendance);
+          // // console.log("emppp", Array.isArray(employee[0].schedule));
+          // // console.log("scheddd", schedule);
+          // if (Array.isArray(employee[0].schedule) && schedule) {
+          // if (
+          //   attendance.timeOut !== "--:--"
+          // ) {
+          //   const scheduleTimeOut24H = `${convertTo24Hour(
+          //     schedule.timeout
+          //   )}:00`;
+          //   // await handleLeaveWithPay(
+          //   //   findObject,
+          //   //   upsertObject,
+          //   //   convertTo24HourTime,
+          //   //   attendance,
+          //   //   schedule,
+          //   //   dailyTimeRec,
+          //   //   employee,
+          //   //   daily_time_record,
+          //   //   getOvertimeDuration,
+          //   //   scheduleTimeOut24H
+          //   // );
+          //   // return;
+          //   return Promise.resolve("OK");
+          // }
+          await upsertObject.execute("daily_time_record", attendance);
+          return Promise.resolve("OK");
+          // } else {
+          //   console.log("Assign Schedule First");
+          // }
         } catch (error) {
           return Promise.reject("Attendace: ", error);
         }
@@ -255,7 +240,7 @@ class AttendanceUseCase {
 
   createAttendanceRecord(
     dailyTimeRec,
-    employee,
+    users,
     currentYear,
     currentMonth,
     timeRecStats,
@@ -267,7 +252,7 @@ class AttendanceUseCase {
         timeRecStats,
         timeIn: deviceTime,
         timeOut: "--:--",
-        employee: employee[0],
+        user: users.username,
         year: currentYear,
         month: currentMonth,
       };
@@ -276,7 +261,7 @@ class AttendanceUseCase {
         ...dailyTimeRec[0],
         timeRecStats,
         timeOut: deviceTime,
-        employee: employee[0],
+        user: users.username,
         year: currentYear,
         month: currentMonth,
       };
@@ -299,36 +284,28 @@ class AttendanceUseCase {
     });
   }
 
-  shouldCheckSchedule(employee, listofHolidays, listofLeaves) {
-    return (
-      Array.isArray(employee[0].schedule) &&
-      employee[0].schedule.length > 0 &&
-      listofHolidays.length === 0 &&
-      listofLeaves.length === 0
-    );
+  shouldCheckSchedule(users) {
+    return;
   }
 
   async checkSchedule(
-    employee,
     dailyTimeRec,
     timeRecStats,
     attendance,
     query,
-    listofSuspension,
     deviceTime
   ) {
     const dayToDay = selectedDay[now.getDay()];
-    const schedule = employee[0].schedule.find(
-      (sched) => sched.day === dayToDay
-    );
+    const schedule = { timein: "9:00 AM", timeout: "6:00 PM" };
+    // employee[0].schedule.find(
+    //   (sched) => sched.day === dayToDay
+    // );
 
     if (schedule) {
       const newTimeNow = convertTo24HourTime(deviceTime);
       const newSchedTimeIN = convertTo24HourTime(schedule.timein);
       const newSchedTimeOUT = convertTo24HourTime(schedule.timeout);
-      const empName = `${attendance?.employee?.Firstname} ${
-        attendance?.employee?.Middlename || ""
-      } ${attendance?.employee?.surname}`;
+      const empName = attendance.user;
       const data = {
         device: query.SN,
         logMessage: `Successfully Time In ${empName}`,
@@ -361,9 +338,9 @@ class AttendanceUseCase {
       } else if (dailyTimeRec.length > 0) {
         const timeIn = convertTo24HourTime(dailyTimeRec[0].timeIn);
         const timeOut = convertTo24HourTime(dailyTimeRec[0].timeOut);
-        if (listofSuspension.length > 0) {
-          timeRecStats.push("SUSPENDED");
-        }
+        // if (listofSuspension.length > 0) {
+        //   timeRecStats.push("SUSPENDED");
+        // }
         if (
           timeIn.hours > newSchedTimeIN.hours ||
           (timeIn.hours === newSchedTimeIN.hours &&
