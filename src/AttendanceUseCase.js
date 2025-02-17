@@ -93,7 +93,7 @@ class AttendanceUseCase {
 
   getCurrentTime() {
     const options = {
-      hour12: true,
+      hour12: false,
       hour: "numeric",
       minute: "numeric",
       second: "numeric",
@@ -120,6 +120,15 @@ class AttendanceUseCase {
     }
 
     return conversionValue.toFixed(3).toString();
+  }
+
+  getCurrentTime() {
+    const now = new Date();
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+
+    return `${hours}:${minutes}:${seconds}`;
   }
 
   async execute(query, lines) {
@@ -151,7 +160,7 @@ class AttendanceUseCase {
       //         users.map(item => {
       //           const dailyRec = {
       //             date: deviceTime[0],
-      //             timeIn: deviceTime[1],
+      //             timeIn: this.getCurrentTime(),
 
       //           }
       //         })
@@ -163,6 +172,7 @@ class AttendanceUseCase {
         const [dailyTimeRec, users] = await Promise.all([
           findObject.execute("daily_time_record", {
             date: this.getCurrentDate(),
+            userID: parseInt(userID),
           }),
           findObject.execute("users", {
             companyID: parseFloat(userID),
@@ -178,11 +188,8 @@ class AttendanceUseCase {
           currentYear,
           currentMonth,
           timeRecStats,
-          deviceTime[1]
+          this.getCurrentTime()
         );
-
-        // console.log("ATTEN: ", attendance);
-        // return;
 
         // if (users.length > 0) {
         //   this.checkSchedule(
@@ -190,7 +197,7 @@ class AttendanceUseCase {
         //     timeRecStats,
         //     attendance,
         //     query,
-        //     deviceTime[1]
+        //     this.getCurrentTime()
         //   );
         // }
 
@@ -253,6 +260,7 @@ class AttendanceUseCase {
         timeIn: deviceTime,
         timeOut: "--:--",
         user: users.username,
+        userID: users.companyID,
         year: currentYear,
         month: currentMonth,
       };
@@ -311,6 +319,8 @@ class AttendanceUseCase {
         logMessage: `Successfully Time In ${empName}`,
         result: "Time In",
       };
+
+      console.log("ATT: ", attendance);
 
       if (dailyTimeRec.length === 0) {
         if (
