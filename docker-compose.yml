@@ -2,7 +2,7 @@ version: "3"
 
 services:
   nodejs:
-    container_name: "ojt-bio"
+    container_name: "biometrics"
     image: node:20.12.1
     restart: always
     working_dir: /api
@@ -16,13 +16,13 @@ services:
 
     labels:
       - traefik.enable=true
-      - traefik.http.services.ojt-bio.loadbalancer.server.port=9000
-      - traefik.http.routers.ojt-bio.rule=Host("psdbm.hris.mweeb.com")
-      - traefik.http.routers.ojt-bio.entrypoints=web
-      - traefik.http.routers.ojt-bio_secured.rule=Host("psdbm.hris.mweeb.com")
-      - traefik.http.routers.ojt-bio_secured.entrypoints=websecure
-      - traefik.http.routers.ojt-bio_secured.tls.certresolver=myhttpchallenge
-      - traefik.http.routers.ojt-bio.middlewares=redirect@file
+      - traefik.http.services.biometrics.loadbalancer.server.port=9000
+      - traefik.http.routers.biometrics.rule=Host("psdbm.hris.mweeb.com")
+      - traefik.http.routers.biometrics.entrypoints=web
+      - traefik.http.routers.biometrics_secured.rule=Host("psdbm.hris.mweeb.com")
+      - traefik.http.routers.biometrics_secured.entrypoints=websecure
+      - traefik.http.routers.biometrics_secured.tls.certresolver=myhttpchallenge
+      - traefik.http.routers.biometrics.middlewares=redirect@file
 
 
 networks:
