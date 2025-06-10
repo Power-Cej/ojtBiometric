@@ -2,6 +2,6 @@
   "applicationId": "09e363f1-3d97-459d-9877-f790785baf7e",
   "endpoint": "https://api.innque.com/v1",
   "server": {
-    "port": 8081
+    "port": 9092
   }
 }
