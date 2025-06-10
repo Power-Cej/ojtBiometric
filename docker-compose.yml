@@ -10,9 +10,9 @@ services:
       - ./:/api
     command: bash -c "npm install && npm start"
     ports:
-     - "8081:8081"
+     - "9092:9092"
     environment:
-      - PORT=8081
+      - PORT=9092
 
     labels:
       - traefik.enable=true
