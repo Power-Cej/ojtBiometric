@@ -1,5 +1,6 @@
 {
-  "applicationId": "09e363f1-3d97-459d-9877-f790785baf7e",
+  "applicationId": "08c4235d-feb7-4d66-b138-08a54be60c8b",
+  "masterKey": "e443e1c7-de63-49a5-b93f-a110f13a1b7e",
   "endpoint": "https://api.innque.com/v1",
   "server": {
     "port": 9092

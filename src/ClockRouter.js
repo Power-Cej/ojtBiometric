@@ -5,23 +5,52 @@ const parsePayload = require("./parsePayload");
 const HandShakeUseCase = require("./HandShakeUseCase");
 const AttendanceUseCase = require("./AttendanceUseCase");
 const RegisterEmployeeUseCase = require("./RegisterEmployeeUseCase");
-let upload = true;
+const FindObjectUseCase = require("./FindObejctUseCase");
+const UpsertUseCase = require("./UpsertUseCase");
+const DeviceUseCase = require("./DeviceUseCase");
+const config = require("./config");
+const DeviceInsertionUseCase = require("./DeviceInsertionUseCase");
+const { RebootDeviceCommand } = require("./request/RebootDeviceCommand");
+const SendUserCommand = require("./request/SendUserCommand");
+const { ClearLogsDeviceCommand } = require("./request/RebootDeviceCommand");
+const RemoveUserCommand = require("./request/RemoveUserCommand");
+const handleAttPhoto = require("./received/handleAttPhoto");
+const handleOperationLog = require("./received/handleOperationLog");
+const SaveImageUseCase = require("./SaveImageUseCase");
+
+const findObject = new FindObjectUseCase();
+const deviceInsertionObject = new DeviceInsertionUseCase();
+const deviceOjbect = new DeviceUseCase();
+const upsertObject = new UpsertUseCase();
+const attendance = new AttendanceUseCase();
+const register = new RegisterEmployeeUseCase();
+const saveImage = new SaveImageUseCase();
 
 class FunctionsRouter extends PromiseRouter {
   constructor() {
     super();
-    this.route("GET", "/iclock/cdata", this.handleHandshake.bind(this));
-    this.route("POST", "/iclock/cdata", this.handleUpload.bind(this));
-    this.route("GET", "/iclock/getrequest", this.handleRequest.bind(this));
+    this.route("GET", "/iclock/cdata/", this.handleHandshake.bind(this));
+    this.route("POST", "/iclock/cdata/", this.handleUpload.bind(this));
+    this.route("GET", "/iclock/getrequest/", this.handleRequest.bind(this));
+    // this.route("POST", "/iclock/devicecmd", this.handleReturnResult.bind(this));
   }
 
-  handleHandshake(req) {
+  async handleHandshake(req) {
+    // console.log("req", req);
     const query = queryToJson(req.query);
     const handshake = new HandShakeUseCase();
     return handshake.execute(query);
   }
 
-  handleUpload(req) {
+  // handleReturnResult(req) {
+  //   console.log("query: ", req);
+  //   const query = queryToJson(req.query);
+  //   console.log("line: ", query);
+  //   return Promise.resolve("OK");
+  // }
+
+  async handleUpload(req) {
+    // console.log("REQ: ", req);
     const query = queryToJson(req.query);
     const lines = req.body
       .split(/\r?\n/) // Split the data by new lines
@@ -32,30 +61,32 @@ class FunctionsRouter extends PromiseRouter {
         return acc;
       }, []);
 
-    const attendance = new AttendanceUseCase();
-    console.log("received device upload");
-    console.log("query", query);
-    console.log("body", req.body);
-    console.log("lines", lines);
+    console.log("QUERY: ", query);
+    // const users = await findObject.execute("users", {
+    //   // updatedAt: { $gt: new Date(devices[0].lastSync) },
+    // });
+    // console.log("SUERSL ", users);
+    // return `C:${1}:CLEAR PHOTO`;
     switch (query.table) {
       case "ATTLOG":
         return attendance.execute(query, lines);
-      case "OPERLOG":
-        const payloads = parsePayload(lines);
-        console.log("Payloads:", payloads);
-        if (payloads.length === 0) {
-          return this.handleOperationLog(lines);
-        } else {
-          return this.handleOperationUpload(payloads);
-        }
+      // case "OPERLOG":
+      //   const payloads = parsePayload(lines);
+      //   if (payloads.length === 0) {
+      //     return handleOperationLog(query, lines, findObject, upsertObject);
+      //   } else {
+      //     return this.handleOperationUpload(query, payloads);
+      //   }
+      case "ATTPHOTO":
+        return handleAttPhoto(req.body, saveImage, upsertObject);
+
       default:
         return Promise.resolve("OK");
     }
   }
 
-  handleOperationUpload(payloads) {
-    const register = new RegisterEmployeeUseCase();
-    return register.execute(payloads);
+  async handleOperationUpload(query, payloads) {
+    return register.execute(query, payloads);
   }
 
   // async handleOperationLog(query, lines) {}
