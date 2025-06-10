@@ -2,7 +2,7 @@ version: '3'
 
 services:
   server:
-    container_name: ojt-system
+    container_name: ojt-bio
     image: nginx:alpine3.18
     restart: always
     volumes:
@@ -10,13 +10,13 @@ services:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     labels:
       - traefik.enable=true
-      - traefik.http.services.ojt-system.loadbalancer.server.port=80
-      - traefik.http.routers.ojt-system.rule=Host("ojt.mweeb.com")
-      - traefik.http.routers.ojt-system.entrypoints=web
-      - traefik.http.routers.ojt-system_secured.rule=Host("ojt.mweeb.com")
-      - traefik.http.routers.ojt-system_secured.entrypoints=websecure
-      - traefik.http.routers.ojt-system_secured.tls.certresolver=myhttpchallenge
-      - traefik.http.routers.ojt-system.middlewares=redirect@file
+      - traefik.http.services.ojt-bio.loadbalancer.server.port=80
+      - traefik.http.routers.ojt-bio.rule=Host("ojt.mweeb.com")
+      - traefik.http.routers.ojt-bio.entrypoints=web
+      - traefik.http.routers.ojt-bio_secured.rule=Host("ojt.mweeb.com")
+      - traefik.http.routers.ojt-bio_secured.entrypoints=websecure
+      - traefik.http.routers.ojt-bio_secured.tls.certresolver=myhttpchallenge
+      - traefik.http.routers.ojt-bio.middlewares=redirect@file
 
 
 networks:
