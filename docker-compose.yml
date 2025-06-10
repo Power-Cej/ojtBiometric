@@ -1,0 +1,25 @@
+version: '3'
+
+services:
+  server:
+    container_name: ojt-system
+    image: nginx:alpine3.18
+    restart: always
+    volumes:
+      - ./build:/usr/share/nginx/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    labels:
+      - traefik.enable=true
+      - traefik.http.services.ojt-system.loadbalancer.server.port=80
+      - traefik.http.routers.ojt-system.rule=Host("ojt.mweeb.com")
+      - traefik.http.routers.ojt-system.entrypoints=web
+      - traefik.http.routers.ojt-system_secured.rule=Host("ojt.mweeb.com")
+      - traefik.http.routers.ojt-system_secured.entrypoints=websecure
+      - traefik.http.routers.ojt-system_secured.tls.certresolver=myhttpchallenge
+      - traefik.http.routers.ojt-system.middlewares=redirect@file
+
+
+networks:
+  default:
+    external:
+      name: server-network
