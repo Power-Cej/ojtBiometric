@@ -1,19 +1,25 @@
-version: '3'
+version: "3"
 
 services:
-  server:
-    container_name: ojt-bio
-    image: nginx:alpine3.18
+  nodejs:
+    container_name: "ojt-bio"
+    image: node:20.12.1
     restart: always
+    working_dir: /api
     volumes:
-      - ./build:/usr/share/nginx/html
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./:/api
+    command: bash -c "npm install && npm start"
+    ports:
+     - "8081:8081"
+    environment:
+      - PORT=8081
+
     labels:
       - traefik.enable=true
-      - traefik.http.services.ojt-bio.loadbalancer.server.port=80
-      - traefik.http.routers.ojt-bio.rule=Host("ojt.mweeb.com")
+      - traefik.http.services.ojt-bio.loadbalancer.server.port=9000
+      - traefik.http.routers.ojt-bio.rule=Host("psdbm.hris.mweeb.com")
       - traefik.http.routers.ojt-bio.entrypoints=web
-      - traefik.http.routers.ojt-bio_secured.rule=Host("ojt.mweeb.com")
+      - traefik.http.routers.ojt-bio_secured.rule=Host("psdbm.hris.mweeb.com")
       - traefik.http.routers.ojt-bio_secured.entrypoints=websecure
       - traefik.http.routers.ojt-bio_secured.tls.certresolver=myhttpchallenge
       - traefik.http.routers.ojt-bio.middlewares=redirect@file
