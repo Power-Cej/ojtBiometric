@@ -199,9 +199,9 @@ class FunctionsRouter extends PromiseRouter {
     if (users.length > 0) {
       return SendUserCommand(users, upsertObject);
     } else {
-      console.log(
-        "there's no available employee, to the device current location!"
-      );
+      // console.log(
+      //   "there's no available employee, to the device current location!"
+      // );
       return Promise.resolve("OK");
     }
     // return Promise.resolve("OK");

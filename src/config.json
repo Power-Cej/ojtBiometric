@@ -3,6 +3,6 @@
   "masterKey": "e443e1c7-de63-49a5-b93f-a110f13a1b7e",
   "endpoint": "https://api.innque.com/v1",
   "server": {
-    "port": 9091
+    "port": 9092
   }
 }
