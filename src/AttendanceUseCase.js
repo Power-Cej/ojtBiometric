@@ -103,9 +103,14 @@ class AttendanceUseCase {
 
   getCurrentTime() {
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, "0");
-    const minutes = String(now.getMinutes()).padStart(2, "0");
-    const seconds = String(now.getSeconds()).padStart(2, "0");
+
+    // Convert to UTC+8 manually
+    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    const phTime = new Date(utc + 8 * 60 * 60000); // add 8 hours
+
+    const hours = String(phTime.getHours()).padStart(2, "0");
+    const minutes = String(phTime.getMinutes()).padStart(2, "0");
+    const seconds = String(phTime.getSeconds()).padStart(2, "0");
 
     return `${hours}:${minutes}:${seconds}`;
   }
