@@ -50,6 +50,7 @@ function SendUserCommand(users, upsertObject) {
         // const command = `C:${cValue}:DATA USER PIN=${bioData.pin}${tab}Name=${bioData.name}${tab}Passwd=${bioData.pass}${tab}Priv=${bioData.pri}`;
         console.log("no Bio: ", command);
         user.updateBio = "added";
+        delete user.password;
         upsertObject.execute("users", user);
         return command;
       }

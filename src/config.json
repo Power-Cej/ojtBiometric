@@ -1,6 +1,6 @@
 {
-  "applicationId": "08c4235d-feb7-4d66-b138-08a54be60c8b",
-  "masterKey": "e443e1c7-de63-49a5-b93f-a110f13a1b7e",
+  "applicationId": "ojt_system",
+  "masterKey": "04e6a13c-d9d1-4203-bf21-af3d41e869ed",
   "endpoint": "https://api.innque.com/v1",
   "server": {
     "port": 9092

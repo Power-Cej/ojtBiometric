@@ -77,8 +77,8 @@ class FunctionsRouter extends PromiseRouter {
       //   } else {
       //     return this.handleOperationUpload(query, payloads);
       //   }
-      case "ATTPHOTO":
-        return handleAttPhoto(req.body, saveImage, upsertObject);
+      // case "ATTPHOTO":
+      //   return handleAttPhoto(req.body, saveImage, upsertObject);
 
       default:
         return Promise.resolve("OK");
