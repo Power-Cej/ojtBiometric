@@ -192,7 +192,7 @@ class AttendanceUseCase {
         timeRecStats,
         timeIn: deviceTime,
         timeOut: "--:--",
-        user: users.username,
+        user: users?.username,
         userID: users.companyID,
         year: currentYear,
         month: currentMonth,
@@ -202,7 +202,7 @@ class AttendanceUseCase {
         ...dailyTimeRec[0],
         timeRecStats,
         timeOut: deviceTime,
-        user: users.username,
+        user: users?.username,
         year: currentYear,
         month: currentMonth,
       };
