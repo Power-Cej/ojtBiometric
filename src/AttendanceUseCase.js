@@ -169,7 +169,6 @@ class AttendanceUseCase {
         }
 
         try {
-          console.log("ATT: ", attendance);
           await upsertObject.execute("daily_time_record", attendance);
           return Promise.resolve("OK");
         } catch (error) {
