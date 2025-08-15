@@ -193,7 +193,7 @@ class AttendanceUseCase {
         timeIn: deviceTime,
         timeOut: "--:--",
         user: users?.username,
-        userID: users.companyID,
+        userID: users?.companyID,
         year: currentYear,
         month: currentMonth,
       };
